@@ -1,0 +1,6 @@
+@DataGateCertManager_HostAddress = http://localhost:5059
+
+GET {{DataGateCertManager_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
