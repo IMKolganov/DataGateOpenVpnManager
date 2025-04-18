@@ -4,10 +4,11 @@ namespace DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
 public interface IEasyRsaService
 {
-    CertificateBuildResult BuildCertificate(OpenVpnServerCertConfig openVpnServerCertConfig,
+    Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
         string baseFileName = "client1");
-    string ReadPemContent(string filePath);
-    CertificateRevokeResult RevokeCertificate(OpenVpnServerCertConfig openVpnServerCertConfig, string commonName);
-    List<CertificateCaInfo> GetAllCertificateInfoInIndexFile(string pkiPath);
-    bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig);
+    Task<string> ReadPemContent(string filePath, CancellationToken cancellationToken);
+    Task<CertificateRevokeResult> RevokeCertificate(string easyRsaPath, string commonName,
+        CancellationToken cancellationToken);
+    Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath, CancellationToken cancellationToken);
+    bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig, CancellationToken cancellationToken);
 }

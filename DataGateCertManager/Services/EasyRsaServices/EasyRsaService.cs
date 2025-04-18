@@ -37,13 +37,14 @@ public class EasyRsaService : IEasyRsaService
 
     #endregion
 
-    public CertificateBuildResult BuildCertificate(OpenVpnServerCertConfig openVpnServerCertConfig,
+    public async Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken, 
         string baseFileName = "client1")
     {
+        var pkiPath = $"{easyRsaPath}/pki";
         _logger.LogInformation($"Starting certificate build for: {baseFileName}");
-        var reqPath = Path.Combine(openVpnServerCertConfig.PkiPath, "reqs", $"{baseFileName}.req");
-        var issuedPath = Path.Combine(openVpnServerCertConfig.PkiPath, "issued", $"{baseFileName}.crt");
-        var keyPath = Path.Combine(openVpnServerCertConfig.PkiPath, "private", $"{baseFileName}.key");
+        var reqPath = Path.Combine(pkiPath, "reqs", $"{baseFileName}.req");
+        var issuedPath = Path.Combine(pkiPath, "issued", $"{baseFileName}.crt");
+        var keyPath = Path.Combine(pkiPath, "private", $"{baseFileName}.key");
 
         _logger.LogInformation($"Expected paths:\nREQ: {reqPath}\nCRT: {issuedPath}\nKEY: {keyPath}");
 
@@ -53,10 +54,11 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var command =
-            $"cd {openVpnServerCertConfig.EasyRsaPath} && ./easyrsa --batch build-client-full {baseFileName} nopass";
+            $"cd {easyRsaPath} && ./easyrsa --batch build-client-full {baseFileName} nopass";
         _logger.LogInformation($"Executing EasyRSA command: {command}");
 
-        var (output, error, exitCode) = _easyRsaExecCommandService.RunCommand(command);
+        var (output, error, exitCode) = 
+            await _easyRsaExecCommandService.RunCommand(command, cancellationToken);
 
         if (exitCode != 0)
         {
@@ -72,8 +74,13 @@ public class EasyRsaService : IEasyRsaService
 
         _logger.LogInformation($"Certificate generated successfully:\n{output}");
 
-        var certificateInfoInIndexFile = GetAllCertificateInfoInIndexFile(openVpnServerCertConfig.PkiPath)
-            .Where(x => x.Status == CertificateStatus.Active && x.CommonName == baseFileName).ToList();
+
+
+        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath, 
+            cancellationToken);
+        certificateInfoInIndexFile = certificateInfoInIndexFile.
+            Where(x => x.Status == CertificateStatus.Active && x.CommonName == baseFileName).ToList();
+
 
         if (certificateInfoInIndexFile.Count <= 0)
         {
@@ -81,21 +88,20 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var certInfo = certificateInfoInIndexFile.First();
-        var serialFromOpenSsl = CheckCertInOpenssl(issuedPath);
+        var serialFromOpenSsl = await CheckCertInOpenssl(issuedPath, cancellationToken);
 
         if (!certInfo.SerialNumber.Contains(serialFromOpenSsl))
         {
             throw new Exception($"Certificate serial number {certInfo.SerialNumber} is invalid.");
         }
 
-        var pemSerialPath = Path.Combine(openVpnServerCertConfig.PkiPath, "certs_by_serial",
+        var pemSerialPath = Path.Combine(pkiPath, "certs_by_serial",
             $"{certInfo.SerialNumber}.pem");
 
         _logger.LogInformation($"Certificate PEM path: {pemSerialPath}");
 
         return new CertificateBuildResult
         {
-            VpnServerId = openVpnServerCertConfig.VpnServerId,
             CertificatePath = issuedPath,
             KeyPath = keyPath,
             RequestPath = reqPath,
@@ -104,36 +110,38 @@ public class EasyRsaService : IEasyRsaService
         };
     }
 
-    public string ReadPemContent(string filePath)
+    public async Task<string> ReadPemContent(string filePath, CancellationToken cancellationToken)
     {
-        var lines = File.ReadAllLines(filePath);
+        var lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
         return string.Join(Environment.NewLine, lines
             .SkipWhile(line => !line.StartsWith("-----BEGIN CERTIFICATE-----"))
             .TakeWhile(line => !line.StartsWith("-----END CERTIFICATE-----"))
             .Append("-----END CERTIFICATE-----"));
     }
 
-    public CertificateRevokeResult RevokeCertificate(OpenVpnServerCertConfig openVpnServerCertConfig, string commonName)
+    public async Task<CertificateRevokeResult> RevokeCertificate(string easyRsaPath, string commonName,
+        CancellationToken cancellationToken)
     {
+        var pkiPath = $"{easyRsaPath}/pki";
         var certificateRevokeResult = new CertificateRevokeResult
         {
-            CertificatePath = Path.Combine(openVpnServerCertConfig.PkiPath, "issued", $"{commonName}.crt")
+            CertificatePath = Path.Combine(pkiPath, "issued", $"{commonName}.crt")
         };
         if (!File.Exists(certificateRevokeResult.CertificatePath))
         {
-            _logger.LogInformation($"EasyRsa path: {openVpnServerCertConfig.EasyRsaPath}");
-            _logger.LogInformation($"PKI path: {openVpnServerCertConfig.PkiPath}");
+            _logger.LogInformation($"EasyRsa path: {easyRsaPath}");
+            _logger.LogInformation($"PKI path: {pkiPath}");
             throw new Exception($"Certificate file not found: {certificateRevokeResult.CertificatePath}");
         }
 
         _logger.LogInformation($"Attempting to revoke certificate for: {commonName}");
-        _logger.LogInformation($"EasyRsaPath: {openVpnServerCertConfig.EasyRsaPath}");
-        _logger.LogInformation($"PKI Path: {openVpnServerCertConfig.PkiPath}");
+        _logger.LogInformation($"EasyRsaPath: {easyRsaPath}");
+        _logger.LogInformation($"PKI Path: {pkiPath}");
         _logger.LogInformation($"Certificate Path: {certificateRevokeResult.CertificatePath}");
 
         // Revoke the certificate
-        var revokeResult = _easyRsaExecCommandService.ExecuteEasyRsaCommand($"revoke {commonName}", 
-            openVpnServerCertConfig.EasyRsaPath, confirm: true);
+        var revokeResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand($"revoke {commonName}", 
+            easyRsaPath, cancellationToken, confirm: true);
         certificateRevokeResult.IsRevoked = revokeResult.IsSuccess;
         if (!certificateRevokeResult.IsRevoked)
         {
@@ -171,21 +179,23 @@ public class EasyRsaService : IEasyRsaService
         }
 
         _logger.LogInformation("Revocation successful. Generating CRL...");
-        if (UpdateCrl(openVpnServerCertConfig))
+        if (await UpdateCrl(easyRsaPath, cancellationToken))
             _logger.LogInformation("CRL successfully updated and deployed.");
 
         _logger.LogInformation("Certificate successfully revoked, CRL updated and deployed.");
         return certificateRevokeResult;
     }
     
-    public List<CertificateCaInfo> GetAllCertificateInfoInIndexFile(string pkiPath)
+    public async Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath, 
+        CancellationToken cancellationToken)
     {
-        return _easyRsaParseDbService.ParseCertificateInfoInIndexFile(pkiPath);
+        return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(pkiPath, cancellationToken);
     }
     
-    public bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig)
+    public bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig,
+        CancellationToken cancellationToken)
     {
-        InstallEasyRsa(openVpnServerCertConfig);
+        InstallEasyRsa(openVpnServerCertConfig, cancellationToken);
         
         Directory.CreateDirectory(openVpnServerCertConfig.OvpnFileDir);
         Directory.CreateDirectory(openVpnServerCertConfig.RevokedOvpnFilesDirPath);
@@ -213,12 +223,13 @@ public class EasyRsaService : IEasyRsaService
         return true;
     }
     
-    private void InstallEasyRsa(OpenVpnServerCertConfig openVpnServerCertConfig)
+    private void InstallEasyRsa(OpenVpnServerCertConfig openVpnServerCertConfig, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(openVpnServerCertConfig.PkiPath))
         {
             _logger.LogInformation("PKI directory does not exist. Initializing PKI...");
-            _easyRsaExecCommandService.RunCommand($"cd {openVpnServerCertConfig.EasyRsaPath} && EASYRSA_BATCH=1 ./easyrsa init-pki");
+            _easyRsaExecCommandService.RunCommand(
+                $"cd {openVpnServerCertConfig.EasyRsaPath} && EASYRSA_BATCH=1 ./easyrsa init-pki", cancellationToken);
             throw new Exception("PKI directory does not exist.");
         }
         else
@@ -227,10 +238,11 @@ public class EasyRsaService : IEasyRsaService
         }
     }
     
-    private string CheckCertInOpenssl(string certPath)
+    private async Task<string> CheckCertInOpenssl(string? certPath, CancellationToken cancellationToken)
     {
         var certPathCommand = $"openssl x509 -in {certPath} -serial -noout";
-        var (certOutput, certError, certExitCode) = _easyRsaExecCommandService.RunCommand(certPathCommand);
+        var (certOutput, certError, certExitCode) = 
+            await _easyRsaExecCommandService.RunCommand(certPathCommand, cancellationToken);
 
         if (certExitCode != 0)
         {
@@ -243,41 +255,23 @@ public class EasyRsaService : IEasyRsaService
     }
 
     
-    private bool UpdateCrl(OpenVpnServerCertConfig openVpnServerCertConfig)
+    private async Task<bool> UpdateCrl(string easyRsaPath, CancellationToken cancellationToken)
     {
-        var crlResult = _easyRsaExecCommandService.ExecuteEasyRsaCommand("gen-crl", 
-            openVpnServerCertConfig.EasyRsaPath);
+        var crlPath = $"{easyRsaPath}/pki/crl.pem"; 
+        var crlResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand(
+            "gen-crl", easyRsaPath, cancellationToken);
         if (!crlResult.IsSuccess)
         {
             _logger.LogInformation($"Command Output: {crlResult.Output}");
             throw new Exception($"Failed to generate CRL: {crlResult.Error}");
         }
         
-        if (!File.Exists(openVpnServerCertConfig.CrlPkiPath))
+        if (!File.Exists(crlPath))
         {
-            throw new Exception($"Generated CRL not found at {openVpnServerCertConfig.CrlPkiPath}," +
-                                $" Command Output: {crlResult.Output}");
+            //todo: think about it and maybe use path from output
+            throw new Exception($"Generated CRL not found at {crlPath}, Command Output: {crlResult.Output}");
         }
-        
-        try
-        {
-            // Copy the CRL to the OpenVPN directory
-            string copyCommand = $"cp {openVpnServerCertConfig.CrlPkiPath} {openVpnServerCertConfig.CrlOpenvpnPath}";
-            var copyResult = _easyRsaExecCommandService.RunCommand(copyCommand);
-
-            if (copyResult.ExitCode != 0)
-            {
-                _logger.LogInformation($"Command Output: {copyResult.Output}");
-                throw new Exception($"Failed to copy CRL file: {copyResult.Error}");
-            }
-
-            _logger.LogInformation($"copyResult - {copyResult}");
-            _logger.LogInformation($"CRL copied to {openVpnServerCertConfig.CrlOpenvpnPath}");
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Error during CRL update: {ex.Message}");
-        }
+        _logger.LogInformation($"Generating CRL File: {crlPath}");
 
         return true;
     }

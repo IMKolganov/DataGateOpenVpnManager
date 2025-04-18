@@ -5,17 +5,10 @@ namespace DataGateCertManager.Services.Interfaces;
 
 public interface ICertVpnService
 {
-    Task<List<CertificateCaInfo>> GetAllVpnServerCertificates(int vpnServerId,
+    Task<List<CertificateCaInfo>> GetAllVpnServerCertificates(string  pkiPath, 
         CancellationToken cancellationToken);
-    Task<List<CertificateCaInfo>> GetAllVpnServerCertificatesByStatus(int vpnServerId,
-        CertificateStatus certificateStatus, CancellationToken cancellationToken);
-    Task<CertificateBuildResult> AddServerCertificate(int vpnServerId, string commonName,
+    Task<CertificateBuildResult> AddServerCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
-    Task<CertificateRevokeResult> RevokeServerCertificate(int vpnServerId, string commonName,
-        CancellationToken cancellationToken);
-    Task<OpenVpnServerCertConfig> GetOpenVpnServerCertConf(int vpnServerId,
-        CancellationToken cancellationToken);
-    Task<OpenVpnServerCertConfig> UpdateServerCertConfig(
-        OpenVpnServerCertConfigInfo openVpnServerCertConfigInfo,
+    Task<CertificateRevokeResult> RevokeServerCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
 }

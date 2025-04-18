@@ -15,20 +15,22 @@ public class EasyRsaParseDbService : IEasyRsaParseDbService
         _logger = logger;
     }
 
-    public List<CertificateCaInfo> ParseCertificateInfoInIndexFile(string pkiPath)
+    public async Task<List<CertificateCaInfo>> ParseCertificateInfoInIndexFileAsync(string pkiPath, 
+        CancellationToken cancellationToken)
     {
         var indexFilePath = Path.Combine(pkiPath, Filename);
         var result = new List<CertificateCaInfo>();
 
         try
         {
-            using var stream = new FileStream(indexFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-
-            while (reader.ReadLine() is { } line)
+            var lines = await File.ReadAllLinesAsync(indexFilePath, cancellationToken);
+        
+            foreach (var line in lines)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+            
                 var parts = line.Split('\t');
-                if (parts.Length >= 5)
+                if (parts.Length >= 6)
                 {
                     result.Add(new CertificateCaInfo
                     {
@@ -44,7 +46,7 @@ public class EasyRsaParseDbService : IEasyRsaParseDbService
 
             return result;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Failed to parse certificate in index file");
             throw;

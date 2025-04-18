@@ -4,5 +4,6 @@ namespace DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
 public interface IEasyRsaParseDbService
 {
-    List<CertificateCaInfo> ParseCertificateInfoInIndexFile(string pkiPath);
+    Task<List<CertificateCaInfo>> ParseCertificateInfoInIndexFileAsync(string pkiPath,
+        CancellationToken cancellationToken);
 }

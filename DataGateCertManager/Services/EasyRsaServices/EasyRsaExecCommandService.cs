@@ -2,6 +2,7 @@
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 
+
 public class EasyRsaExecCommandService : IEasyRsaExecCommandService
 {
     private readonly ILogger<IEasyRsaExecCommandService> _logger;
@@ -14,6 +15,7 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
         _logger = logger;
         _bashCommandRunner = bashCommandRunner;
     }
+    
     #region EasyRSA revoke command variations
 // # =========================================================================================================================
 // # EasyRSA revoke command variations                                                                                       |
@@ -27,19 +29,24 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
 // # | EASYRSA_CRL_DAYS=7300 ./easyrsa gen-crl           | Generates a CRL valid for 20 years                                |
 // # =========================================================================================================================
     #endregion
-    public (bool IsSuccess, string Output, int ExitCode, string Error) ExecuteEasyRsaCommand(
+    public async Task<(bool IsSuccess, string Output, int ExitCode, string Error)> ExecuteEasyRsaCommand(
         string arguments,
         string easyRsaPath,
+        CancellationToken cancellationToken,
         bool confirm = false)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var commandPrefix = $"cd {easyRsaPath} &&";
             var fullArgs = confirm ? $"EASYRSA_BATCH=1 ./easyrsa {arguments}" : $"./easyrsa {arguments}";
             var command = $"{commandPrefix} {fullArgs}";
 
             _logger.LogInformation($"Executing command: {command}");
-            var result = RunCommand(command);
+            var result = await RunCommand(command, cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (result.ExitCode == 0)
             {
@@ -50,6 +57,11 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
             _logger.LogWarning($"Command failed with exit code {result.ExitCode}: {result.Error}");
             return (false, result.Output, result.ExitCode, result.Error);
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Easy-RSA command execution was cancelled");
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError($"Exception during Easy-RSA command execution: {ex.Message}");
@@ -57,8 +69,20 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
         }
     }
 
-    public (string Output, string Error, int ExitCode) RunCommand(string command)
+    public async Task<(string Output, string Error, int ExitCode)> RunCommand(string command,
+        CancellationToken cancellationToken) 
     {
-        return _bashCommandRunner.RunCommand(command);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await _bashCommandRunner.RunCommandAsync(command, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation($"Command execution was cancelled: {command}");
+            throw;
+        }
     }
 }

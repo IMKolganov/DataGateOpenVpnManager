@@ -5,8 +5,12 @@ namespace DataGateCertManager.Services.EasyRsaServices;
 
 public class BashCommandRunner : IBashCommandRunner
 {
-    public (string Output, string Error, int ExitCode) RunCommand(string command)
+    public async Task<(string Output, string Error, int ExitCode)> RunCommandAsync(
+        string command,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var processInfo = new ProcessStartInfo("bash", $"-c \"{command}\"")
         {
             RedirectStandardOutput = true,
@@ -19,10 +23,36 @@ public class BashCommandRunner : IBashCommandRunner
         if (process == null)
             throw new InvalidOperationException("Failed to start process.");
 
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
+        try
+        {
+            var readOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var readErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
-        return (output, error, process.ExitCode);
+            while (!process.HasExited)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Delay(100, cancellationToken);
+            }
+
+            var output = await readOutputTask.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+            var error = await readErrorTask.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+
+            return (output, error, process.ExitCode);
+        }
+        catch (Exception)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(true);
+                }
+            }
+            catch
+            {
+                // ignore errors when try to kill the process
+            }
+            throw;
+        }
     }
 }
