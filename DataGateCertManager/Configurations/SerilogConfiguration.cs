@@ -1,8 +1,8 @@
-﻿using OpenVPNGateMonitor.Models.Helpers;
+﻿using DataGateCertManager.Models;
 using Serilog;
 using Serilog.Sinks.Elasticsearch;
 
-namespace OpenVPNGateMonitor.Configurations;
+namespace DataGateCertManager.Configurations;
 
 public static class SerilogConfiguration
 {

@@ -1,7 +1,6 @@
-﻿using System.Reflection;
-using DataGateVPNBot.Middlewares;
+﻿using DataGateCertManager.Middlewares;
 
-namespace DataGateVPNBot.Configurations;
+namespace DataGateCertManager.Configurations;
 
 public static class MiddlewareConfiguration
 {

@@ -1,8 +1,7 @@
 ﻿using System.Net;
-using DataGateVPNBot.Services.Interfaces;
 using Newtonsoft.Json;
 
-namespace DataGateVPNBot.Middlewares;
+namespace DataGateCertManager.Middlewares;
 
 public class GlobalExceptionMiddleware
 {
@@ -29,9 +28,6 @@ public class GlobalExceptionMiddleware
         {
             _logger.LogError(ex, "Unhandled exception occurred.");
             using var scope = _serviceProvider.CreateScope();
-            var errorService = scope.ServiceProvider.GetRequiredService<IErrorService>();
-            errorService.LogErrorToDatabase(ex, context); //todo: fix it
-            await errorService.NotifyAdminsAsync(ex, context);
             await HandleExceptionAsync(context); //ex);
 
         }

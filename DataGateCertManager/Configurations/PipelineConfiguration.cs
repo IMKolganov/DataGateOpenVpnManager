@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace DataGateVPNBot.Configurations;
+namespace DataGateCertManager.Configurations;
 
 public static class PipelineConfiguration
 {
@@ -26,7 +26,7 @@ public static class PipelineConfiguration
         
         app.MapGet("/",
             () => Results.Text(statusCode: 200, 
-                content: $"DataGateVPNBot Application version: {version}; Environment: {environmentName};"));
+                content: $"DataGateCertManager Application version: {version}; Environment: {environmentName};"));
 
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
     }
