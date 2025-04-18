@@ -22,19 +22,24 @@ public class EasyRsaService : IEasyRsaService
 // # EasyRSA build-client-full command variations
 // # ==============================================================================
 //
-// # | Command Example                                      | Description                                      |
-// # |------------------------------------------------------|--------------------------------------------------|
-// # | ./easyrsa build-client-full client1                 | Creates a client certificate with a password prompt |
-// # | ./easyrsa build-client-full client1 nopass          | Creates a client certificate without a password |
-// # | EASYRSA_BATCH=1 ./easyrsa build-client-full client1 nopass  | Skips confirmation prompts during execution |
-// # | EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full client1 nopass | Sets the certificate expiration to 10 years (3650 days) |
-// # | EASYRSA_KEY_SIZE=4096 ./easyrsa build-client-full client1 nopass | Generates a 4096-bit key instead of the default 2048-bit |
-// # | EASYRSA_DIGEST="sha512" ./easyrsa build-client-full client1 nopass | Uses SHA-512 hashing instead of the default SHA-256 |
-// # | EASYRSA_ALGO="ec" EASYRSA_CURVE="secp384r1" ./easyrsa build-client-full client1 nopass | Uses ECDSA instead of RSA with secp384r1 curve |
-// # | EASYRSA_PASSIN="mypassword" ./easyrsa build-client-full client1 | Automatically provides the password instead of prompting |
-// # | EASYRSA_PASSIN=file:/path/to/password.txt ./easyrsa build-client-full client1 | Reads the password from a file |
+// | Command Example                                                                          | Description                                             |
+// |------------------------------------------------------------------------------------------|---------------------------------------------------------|
+// | `./easyrsa build-client-full client1`                                                    | Creates a client certificate with a password prompt     |
+// | `./easyrsa build-client-full client1 nopass`                                             | Creates a client certificate without a password         |
+// | `EASYRSA_BATCH=1 ./easyrsa build-client-full client1 nopass`                             | Skips confirmation prompts during execution             |
+// | `EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full client1 nopass`                    | Sets the certificate expiration to 10 years (3650 days) |
+// | `EASYRSA_KEY_SIZE=4096 ./easyrsa build-client-full client1 nopass`                       | Generates a 4096-bit key instead of the default 2048-bit|
+// | `EASYRSA_DIGEST="sha512" ./easyrsa build-client-full client1 nopass`                     | Uses SHA-512 hashing instead of the default SHA-256     |
+// | `EASYRSA_ALGO="ec" EASYRSA_CURVE="secp384r1" ./easyrsa build-client-full client1 nopass` | Uses ECDSA instead of RSA with secp384r1 curve          |
+// | `EASYRSA_PASSIN="mypassword" ./easyrsa build-client-full client1`                        | Automatically provides the password instead of prompting|
+// | `EASYRSA_PASSIN=file:/path/to/password.txt ./easyrsa build-client-full client1`          | Reads the password from a file                          |
+// | `EASYRSA_SUBDIR=clients ./easyrsa build-client-full client1 nopass`                      | Stores the certificate and key in a custom subdirectory |
+// | `EASYRSA_REQ_CN="My Custom CN" ./easyrsa build-client-full client1 nopass`               | Sets a custom Common Name (CN) in the certificate       |
+// | `EASYRSA_REQ_SAN="DNS:client1.example.com" ./easyrsa build-client-full client1 nopass`   | Adds a Subject Alternative Name (SAN) to the certificate|
+// | `EASYRSA_REQ_EMAIL="client1@example.com" ./easyrsa build-client-full client1 nopass`     | Specifies an email address in the certificate request   |
+// | `EASYRSA_REQ_OU="MyOrgUnit" ./easyrsa build-client-full client1 nopass`                  | Adds an Organizational Unit to the certificate          |
+//
 // # ==============================================================================
-
     #endregion
 
     public async Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken, 
