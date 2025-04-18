@@ -9,7 +9,8 @@ public class EasyRsaService : IEasyRsaService
     private readonly ILogger<IEasyRsaService> _logger;
     private readonly IEasyRsaParseDbService _easyRsaParseDbService;
     private readonly IEasyRsaExecCommandService _easyRsaExecCommandService;
-    public EasyRsaService(ILogger<IEasyRsaService> logger, IEasyRsaParseDbService easyRsaParseDbService, 
+
+    public EasyRsaService(ILogger<IEasyRsaService> logger, IEasyRsaParseDbService easyRsaParseDbService,
         IEasyRsaExecCommandService easyRsaExecCommandService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -18,6 +19,7 @@ public class EasyRsaService : IEasyRsaService
     }
 
     #region easyrsa build-client-full
+
 // # ==============================================================================
 // # EasyRSA build-client-full command variations
 // # ==============================================================================
@@ -40,9 +42,10 @@ public class EasyRsaService : IEasyRsaService
 // | `EASYRSA_REQ_OU="MyOrgUnit" ./easyrsa build-client-full client1 nopass`                  | Adds an Organizational Unit to the certificate          |
 //
 // # ==============================================================================
+
     #endregion
 
-    public async Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken, 
+    public async Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
         string baseFileName = "client1")
     {
         var pkiPath = $"{easyRsaPath}/pki";
@@ -62,7 +65,7 @@ public class EasyRsaService : IEasyRsaService
             $"cd {easyRsaPath} && ./easyrsa --batch build-client-full {baseFileName} nopass";
         _logger.LogInformation($"Executing EasyRSA command: {command}");
 
-        var (output, error, exitCode) = 
+        var (output, error, exitCode) =
             await _easyRsaExecCommandService.RunCommand(command, cancellationToken);
 
         if (exitCode != 0)
@@ -81,10 +84,10 @@ public class EasyRsaService : IEasyRsaService
 
 
 
-        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath, 
+        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath,
             cancellationToken);
-        certificateInfoInIndexFile = certificateInfoInIndexFile.
-            Where(x => x.Status == CertificateStatus.Active && x.CommonName == baseFileName).ToList();
+        certificateInfoInIndexFile = certificateInfoInIndexFile
+            .Where(x => x.Status == CertificateStatus.Active && x.CommonName == baseFileName).ToList();
 
 
         if (certificateInfoInIndexFile.Count <= 0)
@@ -145,7 +148,7 @@ public class EasyRsaService : IEasyRsaService
         _logger.LogInformation($"Certificate Path: {certificateRevokeResult.CertificatePath}");
 
         // Revoke the certificate
-        var revokeResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand($"revoke {commonName}", 
+        var revokeResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand($"revoke {commonName}",
             easyRsaPath, cancellationToken, confirm: true);
         certificateRevokeResult.IsRevoked = revokeResult.IsSuccess;
         if (!certificateRevokeResult.IsRevoked)
@@ -158,13 +161,13 @@ public class EasyRsaService : IEasyRsaService
                     break;
 
                 case 1:
-                    if (revokeResult.Output.Contains("ERROR:Already revoked") 
+                    if (revokeResult.Output.Contains("ERROR:Already revoked")
                         || revokeResult.Error.Contains("ERROR:Already revoked"))
                     {
                         certificateRevokeResult.Message += $"Certificate is already revoked: {commonName}";
                         _logger.LogWarning($"Certificate is already revoked: {commonName}");
                     }
-                    else if (revokeResult.Output.Contains("ERROR: Certificate not found") 
+                    else if (revokeResult.Output.Contains("ERROR: Certificate not found")
                              || revokeResult.Output.Contains("ERROR: Certificate not found"))
                     {
                         certificateRevokeResult.Message += $"Certificate not found: {commonName}";
@@ -175,6 +178,7 @@ public class EasyRsaService : IEasyRsaService
                         throw new Exception($"Failed to revoke certificate. Unknown error: {commonName}, " +
                                             $"ExitCode: {revokeResult.ExitCode}, Output: {revokeResult.Output}");
                     }
+
                     break;
 
                 default:
@@ -190,30 +194,31 @@ public class EasyRsaService : IEasyRsaService
         _logger.LogInformation("Certificate successfully revoked, CRL updated and deployed.");
         return certificateRevokeResult;
     }
-    
-    public async Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath, 
+
+    public async Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath,
         CancellationToken cancellationToken)
     {
         return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(pkiPath, cancellationToken);
     }
-    
+
     public bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig,
         CancellationToken cancellationToken)
     {
         InstallEasyRsa(openVpnServerCertConfig, cancellationToken);
-        
+
         Directory.CreateDirectory(openVpnServerCertConfig.OvpnFileDir);
         Directory.CreateDirectory(openVpnServerCertConfig.RevokedOvpnFilesDirPath);
-        
+
         if (!Directory.Exists(openVpnServerCertConfig.OvpnFileDir))
         {
             throw new FileNotFoundException("The output directory could not be found.");
         }
+
         if (!Directory.Exists(openVpnServerCertConfig.RevokedOvpnFilesDirPath))
         {
             throw new FileNotFoundException("Revoked folder not found");
         }
-        
+
         var indexFilePath = Path.Combine(openVpnServerCertConfig.PkiPath, "index.txt");
         if (!File.Exists(indexFilePath))
         {
@@ -227,7 +232,7 @@ public class EasyRsaService : IEasyRsaService
 
         return true;
     }
-    
+
     private void InstallEasyRsa(OpenVpnServerCertConfig openVpnServerCertConfig, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(openVpnServerCertConfig.PkiPath))
@@ -242,11 +247,11 @@ public class EasyRsaService : IEasyRsaService
             _logger.LogInformation("PKI directory exists. Skipping initialization...");
         }
     }
-    
+
     private async Task<string> CheckCertInOpenssl(string? certPath, CancellationToken cancellationToken)
     {
         var certPathCommand = $"openssl x509 -in {certPath} -serial -noout";
-        var (certOutput, certError, certExitCode) = 
+        var (certOutput, certError, certExitCode) =
             await _easyRsaExecCommandService.RunCommand(certPathCommand, cancellationToken);
 
         if (certExitCode != 0)
@@ -259,10 +264,10 @@ public class EasyRsaService : IEasyRsaService
         return serial;
     }
 
-    
+
     private async Task<bool> UpdateCrl(string easyRsaPath, CancellationToken cancellationToken)
     {
-        var crlPath = $"{easyRsaPath}/pki/crl.pem"; 
+        var crlPath = $"{easyRsaPath}/pki/crl.pem";
         var crlResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand(
             "gen-crl", easyRsaPath, cancellationToken);
         if (!crlResult.IsSuccess)
@@ -270,12 +275,13 @@ public class EasyRsaService : IEasyRsaService
             _logger.LogInformation($"Command Output: {crlResult.Output}");
             throw new Exception($"Failed to generate CRL: {crlResult.Error}");
         }
-        
+
         if (!File.Exists(crlPath))
         {
             //todo: think about it and maybe use path from output
             throw new Exception($"Generated CRL not found at {crlPath}, Command Output: {crlResult.Output}");
         }
+
         _logger.LogInformation($"Generating CRL File: {crlPath}");
 
         return true;
