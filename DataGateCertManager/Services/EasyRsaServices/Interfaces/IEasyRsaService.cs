@@ -10,5 +10,4 @@ public interface IEasyRsaService
     Task<CertificateRevokeResult> RevokeCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
     Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath, CancellationToken cancellationToken);
-    bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig, CancellationToken cancellationToken);
 }

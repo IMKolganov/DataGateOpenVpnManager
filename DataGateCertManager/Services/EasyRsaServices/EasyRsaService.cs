@@ -201,38 +201,6 @@ public class EasyRsaService : IEasyRsaService
         return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(pkiPath, cancellationToken);
     }
 
-    public bool CheckHealthFileSystem(OpenVpnServerCertConfig openVpnServerCertConfig,
-        CancellationToken cancellationToken)
-    {
-        InstallEasyRsa(openVpnServerCertConfig, cancellationToken);
-
-        Directory.CreateDirectory(openVpnServerCertConfig.OvpnFileDir);
-        Directory.CreateDirectory(openVpnServerCertConfig.RevokedOvpnFilesDirPath);
-
-        if (!Directory.Exists(openVpnServerCertConfig.OvpnFileDir))
-        {
-            throw new FileNotFoundException("The output directory could not be found.");
-        }
-
-        if (!Directory.Exists(openVpnServerCertConfig.RevokedOvpnFilesDirPath))
-        {
-            throw new FileNotFoundException("Revoked folder not found");
-        }
-
-        var indexFilePath = Path.Combine(openVpnServerCertConfig.PkiPath, "index.txt");
-        if (!File.Exists(indexFilePath))
-        {
-            throw new FileNotFoundException($"Index file not found at path: {indexFilePath}");
-        }
-
-        if (string.IsNullOrEmpty(openVpnServerCertConfig.CaCertPath))
-            throw new ArgumentNullException(nameof(openVpnServerCertConfig.CaCertPath));
-        if (string.IsNullOrEmpty(openVpnServerCertConfig.TlsAuthKey))
-            throw new ArgumentNullException(nameof(openVpnServerCertConfig.TlsAuthKey));
-
-        return true;
-    }
-
     private void InstallEasyRsa(OpenVpnServerCertConfig openVpnServerCertConfig, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(openVpnServerCertConfig.PkiPath))
