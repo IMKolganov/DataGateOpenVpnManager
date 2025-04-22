@@ -4,6 +4,7 @@
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
     </PropertyGroup>
 
     <ItemGroup>
@@ -16,6 +17,12 @@
         <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
         <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="10.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Include="wwwroot\favicon.ico">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

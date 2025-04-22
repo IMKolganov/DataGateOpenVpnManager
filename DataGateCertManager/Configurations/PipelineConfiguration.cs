@@ -6,10 +6,15 @@ public static class PipelineConfiguration
 {
     public static void ConfigurePipeline(this WebApplication app)
     {
+        app.UseStaticFiles();
         if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
         {
             app.UseSwagger();
-            app.UseSwaggerUI();
+            app.UseSwaggerUI(options =>
+            {
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "DataGateCertManager API V1");
+                options.HeadContent = @"<link rel=""icon"" type=""image/png"" href=""/favicon.ico"">";
+            });
         }
 
         app.UseHttpsRedirection();
