@@ -5,15 +5,9 @@ using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 
-public class EasyRsaParseDbService : IEasyRsaParseDbService
+public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEasyRsaParseDbService
 {
     private const string Filename = "index.txt"; // TODO: Load from config if needed
-    private readonly ILogger<IEasyRsaParseDbService> _logger;
-
-    public EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger)
-    {
-        _logger = logger;
-    }
 
     public async Task<List<CertificateCaInfo>> ParseCertificateInfoInIndexFileAsync(string pkiPath, 
         CancellationToken cancellationToken)
@@ -48,7 +42,7 @@ public class EasyRsaParseDbService : IEasyRsaParseDbService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogError(ex, "Failed to parse certificate in index file");
+            logger.LogError(ex, "Failed to parse certificate in index file");
             throw;
         }
     }
@@ -66,7 +60,7 @@ public class EasyRsaParseDbService : IEasyRsaParseDbService
 
     private static DateTime ParseDate(string dateString)
     {
-        // date format from index.txt: "YYMMDDHHMMSSZ", for example: "250128120000Z"
+        // date format from index.txt: "YYMMDDHHMMSSZ", for example, "250128120000Z"
         var raw = dateString.TrimEnd('Z');
         if (DateTime.TryParseExact(
                 raw,

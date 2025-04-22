@@ -1,5 +1,4 @@
-﻿
-using System.Threading.RateLimiting;
+﻿using System.Threading.RateLimiting;
 using DataGateCertManager.Services;
 using DataGateCertManager.Services.EasyRsaServices;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
