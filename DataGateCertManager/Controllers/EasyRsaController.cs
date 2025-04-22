@@ -6,31 +6,21 @@ namespace DataGateCertManager.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class EasyRsaController : ControllerBase
+public class EasyRsaController(
+    IEasyRsaService easyRsaService,
+    IConfiguration configuration,
+    ILogger<EasyRsaController> logger)
+    : ControllerBase
 {
-    private readonly IEasyRsaService _easyRsaService;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<EasyRsaController> _logger;
-
-    public EasyRsaController(
-        IEasyRsaService easyRsaService,
-        IConfiguration configuration,
-        ILogger<EasyRsaController> logger)
-    {
-        _easyRsaService = easyRsaService;
-        _configuration = configuration;
-        _logger = logger;
-    }
-
     [HttpPost("certificates")]
     public async Task<ActionResult<CertificateBuildResult>> BuildCertificate([FromBody] CertificateBuildRequest request)
     {
         try
         {
-            var easyRsaPath = _configuration["EasyRsa:Path"] 
+            var easyRsaPath = configuration["EasyRsa:Path"] 
                 ?? throw new InvalidOperationException("EasyRsa:Path configuration is missing");
 
-            var result = await _easyRsaService.BuildCertificate(
+            var result = await easyRsaService.BuildCertificate(
                 easyRsaPath,
                 HttpContext.RequestAborted,
                 request.CommonName);
@@ -39,7 +29,7 @@ public class EasyRsaController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error building certificate for {CommonName}", request.CommonName);
+            logger.LogError(ex, "Error building certificate for {CommonName}", request.CommonName);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -49,10 +39,10 @@ public class EasyRsaController : ControllerBase
     {
         try
         {
-            var easyRsaPath = _configuration["EasyRsa:Path"] 
+            var easyRsaPath = configuration["EasyRsa:Path"] 
                 ?? throw new InvalidOperationException("EasyRsa:Path configuration is missing");
 
-            var result = await _easyRsaService.RevokeCertificate(
+            var result = await easyRsaService.RevokeCertificate(
                 easyRsaPath,
                 commonName,
                 HttpContext.RequestAborted);
@@ -61,7 +51,7 @@ public class EasyRsaController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error revoking certificate for {CommonName}", commonName);
+            logger.LogError(ex, "Error revoking certificate for {CommonName}", commonName);
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -71,10 +61,10 @@ public class EasyRsaController : ControllerBase
     {
         try
         {
-            var pkiPath = _configuration["EasyRsa:PkiPath"] 
+            var pkiPath = configuration["EasyRsa:PkiPath"] 
                 ?? throw new InvalidOperationException("EasyRsa:PkiPath configuration is missing");
 
-            var certificates = await _easyRsaService.GetAllCertificateInfoInIndexFile(
+            var certificates = await easyRsaService.GetAllCertificateInfoInIndexFile(
                 pkiPath,
                 HttpContext.RequestAborted);
 
@@ -82,7 +72,7 @@ public class EasyRsaController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting all certificates");
+            logger.LogError(ex, "Error getting all certificates");
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -92,12 +82,12 @@ public class EasyRsaController : ControllerBase
     {
         try
         {
-            var content = await _easyRsaService.ReadPemContent(filePath, HttpContext.RequestAborted);
+            var content = await easyRsaService.ReadPemContent(filePath, HttpContext.RequestAborted);
             return Ok(content);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error reading PEM content from {FilePath}", filePath);
+            logger.LogError(ex, "Error reading PEM content from {FilePath}", filePath);
             return BadRequest(new { error = ex.Message });
         }
     }

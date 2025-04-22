@@ -48,8 +48,11 @@ public class EasyRsaService : IEasyRsaService
     public async Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
         string baseFileName = "client1")
     {
-        var pkiPath = $"{easyRsaPath}/pki";
+        easyRsaPath = Path.GetFullPath(easyRsaPath);
+
+        var pkiPath = Path.Combine(easyRsaPath, "pki");
         _logger.LogInformation($"Starting certificate build for: {baseFileName}");
+
         var reqPath = Path.Combine(pkiPath, "reqs", $"{baseFileName}.req");
         var issuedPath = Path.Combine(pkiPath, "issued", $"{baseFileName}.crt");
         var keyPath = Path.Combine(pkiPath, "private", $"{baseFileName}.key");
@@ -62,7 +65,7 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var command =
-            $"cd {easyRsaPath} && ./easyrsa --batch build-client-full {baseFileName} nopass";
+            $"cd {easyRsaPath.Replace('\\', '/')} && ./easyrsa --batch build-client-full {baseFileName} nopass";
         _logger.LogInformation($"Executing EasyRSA command: {command}");
 
         var (output, error, exitCode) =
@@ -82,13 +85,9 @@ public class EasyRsaService : IEasyRsaService
 
         _logger.LogInformation($"Certificate generated successfully:\n{output}");
 
-
-
-        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath,
-            cancellationToken);
+        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath, cancellationToken);
         certificateInfoInIndexFile = certificateInfoInIndexFile
             .Where(x => x.Status == CertificateStatus.Active && x.CommonName == baseFileName).ToList();
-
 
         if (certificateInfoInIndexFile.Count <= 0)
         {
@@ -103,8 +102,7 @@ public class EasyRsaService : IEasyRsaService
             throw new Exception($"Certificate serial number {certInfo.SerialNumber} is invalid.");
         }
 
-        var pemSerialPath = Path.Combine(pkiPath, "certs_by_serial",
-            $"{certInfo.SerialNumber}.pem");
+        var pemSerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{certInfo.SerialNumber}.pem");
 
         _logger.LogInformation($"Certificate PEM path: {pemSerialPath}");
 
