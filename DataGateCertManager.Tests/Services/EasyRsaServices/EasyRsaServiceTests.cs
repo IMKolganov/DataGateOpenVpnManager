@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using DataGateCertManager.Models;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
@@ -70,10 +71,7 @@ public class EasyRsaServiceTests
 
         // Assert
         Assert.Equal(Path.GetFullPath(issuedPath), Path.GetFullPath(result.CertificatePath), ignoreCase: true);
-        Assert.Equal(Path.GetFullPath(keyPath), Path.GetFullPath(result.KeyPath), ignoreCase: true);
-        Assert.Equal(Path.GetFullPath(reqPath), Path.GetFullPath(result.RequestPath), ignoreCase: true);
-        Assert.Equal(Path.GetFullPath(pemPath), Path.GetFullPath(result.PemPath), ignoreCase: true);
-        Assert.Equal("ABC123", result.CertId);
+        Assert.Equal("ABC123", result.SerialNumber);
 
         // Cleanup
         Directory.Delete(tempDir, recursive: true);
@@ -164,10 +162,10 @@ public class EasyRsaServiceTests
     {
         // Arrange
         var pkiPath = "/some/path/pki";
-        var expectedList = new List<CertificateCaInfo>
+        var expectedList = new List<ServerCertificate>
         {
-            new CertificateCaInfo { CommonName = "test1" },
-            new CertificateCaInfo { CommonName = "test2" }
+            new ServerCertificate { CommonName = "test1" },
+            new ServerCertificate { CommonName = "test2" }
         };
 
         _parserMock
@@ -233,7 +231,7 @@ public class EasyRsaServiceTests
         var easyRsaPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         var crlPath = Path.Combine(easyRsaPath, "pki", "crl.pem");
         Directory.CreateDirectory(Path.GetDirectoryName(crlPath)!);
-        File.WriteAllText(crlPath, "dummy");
+        await File.WriteAllTextAsync(crlPath, "dummy");
 
         _execMock
             .Setup(x => x.ExecuteEasyRsaCommand("gen-crl", easyRsaPath, It.IsAny<CancellationToken>(), false))

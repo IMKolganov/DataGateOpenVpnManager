@@ -11,7 +11,7 @@ public static class ServiceConfiguration
     public static void ConfigureServices(this IServiceCollection services)
     {
         // Core services
-        services.AddScoped<ICertVpnService, CertVpnService>();
+        services.AddScoped<IOvpnFileService, OvpnFileService>();
         
         // EasyRsa services
         services.AddScoped<IEasyRsaService, EasyRsaService>();
