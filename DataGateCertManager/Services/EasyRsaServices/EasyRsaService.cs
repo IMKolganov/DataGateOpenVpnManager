@@ -201,13 +201,13 @@ public class EasyRsaService : IEasyRsaService
         return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(pkiPath, cancellationToken);
     }
 
-    private void InstallEasyRsa(OpenVpnServerCertConfig openVpnServerCertConfig, CancellationToken cancellationToken)
+    private void InstallEasyRsa(string easyRsaPath, CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(openVpnServerCertConfig.PkiPath))
+        if (!Directory.Exists(easyRsaPath))
         {
             _logger.LogInformation("PKI directory does not exist. Initializing PKI...");
             _easyRsaExecCommandService.RunCommand(
-                $"cd {openVpnServerCertConfig.EasyRsaPath} && EASYRSA_BATCH=1 ./easyrsa init-pki", cancellationToken);
+                $"cd {easyRsaPath} && EASYRSA_BATCH=1 ./easyrsa init-pki", cancellationToken);
             throw new Exception("PKI directory does not exist.");
         }
         else
