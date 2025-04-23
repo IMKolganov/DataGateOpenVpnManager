@@ -23,4 +23,8 @@
       <ProjectReference Include="..\DataGateCertManager\DataGateCertManager.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Controllers\" />
+    </ItemGroup>
+
 </Project>

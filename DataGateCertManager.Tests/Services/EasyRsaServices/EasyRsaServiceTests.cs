@@ -184,13 +184,9 @@ public class EasyRsaServiceTests
     public void InstallEasyRsa_ThrowsAndRunsInit_WhenPkiMissing()
     {
         // Arrange
-        var config = new OpenVpnServerCertConfig
-        {
-            EasyRsaPath = "/fake/easyrsa",
-            PkiPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()) // специально не создаём
-        };
+        var easyRsaPath = "";
 
-        var expectedCommand = $"cd {config.EasyRsaPath.Replace('\\', '/')} && EASYRSA_BATCH=1 ./easyrsa init-pki";
+        var expectedCommand = $"cd {easyRsaPath.Replace('\\', '/')} && EASYRSA_BATCH=1 ./easyrsa init-pki";
 
         _execMock
             .Setup(x => x.RunCommand(expectedCommand, It.IsAny<CancellationToken>()))
@@ -198,7 +194,7 @@ public class EasyRsaServiceTests
 
         // Act + Assert
         var ex = Assert.Throws<TargetInvocationException>(() =>
-            _service.Invoke<object>("InstallEasyRsa", config, CancellationToken.None)
+            _service.Invoke<object>("InstallEasyRsa", easyRsaPath, CancellationToken.None)
         );
 
         Assert.NotNull(ex.InnerException);
