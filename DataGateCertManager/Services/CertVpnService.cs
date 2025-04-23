@@ -1,5 +1,4 @@
-﻿using DataGateCertManager.Models;
-using DataGateCertManager.Models.Enums;
+﻿using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using DataGateCertManager.Services.Interfaces;
 
@@ -15,20 +14,20 @@ public class CertVpnService : ICertVpnService
         _easyRsaService = easyRsaService;
     }
 
-    public async Task<List<CertificateCaInfo>> GetAllVpnServerCertificates(string  pkiPath, 
+    public async Task<List<ServerCertificate>> GetAllVpnServerCertificates(string  pkiPath, 
         CancellationToken cancellationToken)
     {
         return await _easyRsaService.GetAllCertificateInfoInIndexFile(pkiPath, cancellationToken);
     }
 
-    public async Task<CertificateBuildResult> AddServerCertificate(string easyRsaPath, string commonName, 
+    public async Task<ServerCertificate> AddServerCertificate(string easyRsaPath, string commonName, 
         CancellationToken cancellationToken)
     {
         //first realization, with "nopass", without any params if you need more check method BuildCertificate
         return await _easyRsaService.BuildCertificate(easyRsaPath, cancellationToken, commonName);
     }
 
-    public async Task<CertificateRevokeResult> RevokeServerCertificate(string easyRsaPath, string commonName, 
+    public async Task<ServerCertificate> RevokeServerCertificate(string easyRsaPath, string commonName, 
         CancellationToken cancellationToken)
     {
         return await _easyRsaService.RevokeCertificate(easyRsaPath, commonName, cancellationToken);

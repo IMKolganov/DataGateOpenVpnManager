@@ -1,4 +1,5 @@
 ﻿using DataGateCertManager.Models;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
@@ -45,17 +46,17 @@ public class EasyRsaService : IEasyRsaService
 
     #endregion
 
-    public async Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
-        string baseFileName = "client1")
+    public async Task<ServerCertificate> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
+        string commonName = "client1")
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
 
         var pkiPath = Path.Combine(easyRsaPath, "pki");
-        _logger.LogInformation($"Starting certificate build for: {baseFileName}");
+        _logger.LogInformation($"Starting certificate build for: {commonName}");
 
-        var reqPath = Path.Combine(pkiPath, "reqs", $"{baseFileName}.req");
-        var issuedPath = Path.Combine(pkiPath, "issued", $"{baseFileName}.crt");
-        var keyPath = Path.Combine(pkiPath, "private", $"{baseFileName}.key");
+        var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
+        var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
+        var keyPath = Path.Combine(pkiPath, "private", $"{commonName}.key");
 
         _logger.LogInformation($"Expected paths:\nREQ: {reqPath}\nCRT: {issuedPath}\nKEY: {keyPath}");
 
@@ -65,7 +66,7 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var command =
-            $"cd {easyRsaPath.Replace('\\', '/')} && ./easyrsa --batch build-client-full {baseFileName} nopass";
+            $"cd {easyRsaPath.Replace('\\', '/')} && ./easyrsa --batch build-client-full {commonName} nopass";
         _logger.LogInformation($"Executing EasyRSA command: {command}");
 
         var (output, error, exitCode) =
@@ -87,7 +88,7 @@ public class EasyRsaService : IEasyRsaService
 
         var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath, cancellationToken);
         certificateInfoInIndexFile = certificateInfoInIndexFile
-            .Where(x => x.Status == CertificateStatus.Active && x.CommonName == baseFileName).ToList();
+            .Where(x => x.Status == CertificateStatus.Active && x.CommonName == commonName).ToList();
 
         if (certificateInfoInIndexFile.Count <= 0)
         {
@@ -106,13 +107,14 @@ public class EasyRsaService : IEasyRsaService
 
         _logger.LogInformation($"Certificate PEM path: {pemSerialPath}");
 
-        return new CertificateBuildResult
+        return new ServerCertificate
         {
-            CertificatePath = issuedPath,
-            KeyPath = keyPath,
-            RequestPath = reqPath,
-            PemPath = pemSerialPath,
-            CertId = certInfo.SerialNumber
+            SerialNumber = certInfo.SerialNumber,
+            CertificatePath = issuedPath, 
+            CommonName = commonName,
+            ExpiryDate = DateTime.MaxValue,
+            IsRevoked = false,
+            Status = CertificateStatus.Active,
         };
     }
 
@@ -125,11 +127,11 @@ public class EasyRsaService : IEasyRsaService
             .Append("-----END CERTIFICATE-----"));
     }
 
-    public async Task<CertificateRevokeResult> RevokeCertificate(string easyRsaPath, string commonName,
+    public async Task<ServerCertificate> RevokeCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken)
     {
         var pkiPath = $"{easyRsaPath}/pki";
-        var certificateRevokeResult = new CertificateRevokeResult
+        var certificateRevokeResult = new ServerCertificate
         {
             CertificatePath = Path.Combine(pkiPath, "issued", $"{commonName}.crt")
         };
@@ -193,7 +195,7 @@ public class EasyRsaService : IEasyRsaService
         return certificateRevokeResult;
     }
 
-    public async Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath,
+    public async Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string pkiPath,
         CancellationToken cancellationToken)
     {
         return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(pkiPath, cancellationToken);

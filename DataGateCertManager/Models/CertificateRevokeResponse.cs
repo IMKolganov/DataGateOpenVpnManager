@@ -1,6 +1,6 @@
 ﻿namespace DataGateCertManager.Models;
 
-public class CertificateRevokeResult
+public class CertificateRevokeResponse
 {
     public string CertificatePath { get; set; } = string.Empty;
     //todo: think about it how get this params

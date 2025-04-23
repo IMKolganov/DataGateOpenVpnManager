@@ -1,5 +1,5 @@
 ﻿using System.Globalization;
-using DataGateCertManager.Models;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
@@ -9,11 +9,11 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
 {
     private const string Filename = "index.txt"; // TODO: Load from config if needed
 
-    public async Task<List<CertificateCaInfo>> ParseCertificateInfoInIndexFileAsync(string pkiPath, 
+    public async Task<List<ServerCertificate>> ParseCertificateInfoInIndexFileAsync(string pkiPath, 
         CancellationToken cancellationToken)
     {
         var indexFilePath = Path.Combine(pkiPath, Filename);
-        var result = new List<CertificateCaInfo>();
+        var result = new List<ServerCertificate>();
 
         try
         {
@@ -26,7 +26,7 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
                 var parts = line.Split('\t');
                 if (parts.Length >= 6)
                 {
-                    result.Add(new CertificateCaInfo
+                    result.Add(new ServerCertificate
                     {
                         Status = ParseStatus(parts[0]),
                         ExpiryDate = ParseDate(parts[1]),

@@ -1,14 +1,15 @@
 ﻿using DataGateCertManager.Models;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Models.Enums;
 
 namespace DataGateCertManager.Services.Interfaces;
 
 public interface ICertVpnService
 {
-    Task<List<CertificateCaInfo>> GetAllVpnServerCertificates(string  pkiPath, 
+    Task<List<ServerCertificate>> GetAllVpnServerCertificates(string  pkiPath, 
         CancellationToken cancellationToken);
-    Task<CertificateBuildResult> AddServerCertificate(string easyRsaPath, string commonName,
+    Task<ServerCertificate> AddServerCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
-    Task<CertificateRevokeResult> RevokeServerCertificate(string easyRsaPath, string commonName,
+    Task<ServerCertificate> RevokeServerCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
 }

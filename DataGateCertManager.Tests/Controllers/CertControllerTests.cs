@@ -9,15 +9,15 @@ using Moq;
 
 namespace DataGateCertManager.Tests.Controllers;
 
-public class EasyRsaControllerTests
+public class CertControllerTests
 {
     private readonly Mock<IEasyRsaService> _rsaServiceMock = new();
     private readonly Mock<IConfiguration> _configMock = new();
-    private readonly Mock<ILogger<EasyRsaController>> _loggerMock = new();
+    private readonly Mock<ILogger<CertController>> _loggerMock = new();
 
-    private EasyRsaController CreateController()
+    private CertController CreateController()
     {
-        var controller = new EasyRsaController(_rsaServiceMock.Object, _configMock.Object, _loggerMock.Object)
+        var controller = new CertController(_rsaServiceMock.Object, _configMock.Object, _loggerMock.Object)
             {
                 ControllerContext = new ControllerContext
                 {
@@ -36,11 +36,11 @@ public class EasyRsaControllerTests
 
         var expected = new CertificateBuildResult { CertificatePath = "cert.pem" };
         _rsaServiceMock
-            .Setup(s => s.BuildCertificate("/test/path", It.IsAny<CancellationToken>(), "test"))
+            .Setup(s => s.AddServerCertificate("/test/path", It.IsAny<CancellationToken>(), "test"))
             .ReturnsAsync(expected);
 
         // Act
-        var result = await controller.BuildCertificate(new CertificateBuildRequest { CommonName = "test" });
+        var result = await controller.AddServerCertificate(new AddServerCertificateRequest { CommonName = "test" });
 
         // Assert
         var ok = Assert.IsType<OkObjectResult>(result.Result);
@@ -114,7 +114,7 @@ public class EasyRsaControllerTests
         var controller = CreateController();
         _configMock.Setup(c => c["EasyRsa:Path"]).Throws(new Exception("config error"));
 
-        var result = await controller.BuildCertificate(new CertificateBuildRequest { CommonName = "test" });
+        var result = await controller.BuildCertificate(new AddServerCertificateRequest { CommonName = "test" });
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Contains("config error", badRequest.Value!.ToString());

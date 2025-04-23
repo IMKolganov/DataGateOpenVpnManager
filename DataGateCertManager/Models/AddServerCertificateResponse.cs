@@ -1,6 +1,6 @@
 ﻿namespace DataGateCertManager.Models;
 
-public class CertificateBuildResult
+public class AddServerCertificateResponse
 {
     public string CertificatePath { get; set; } = string.Empty;
     public string KeyPath { get; set; } = string.Empty;
