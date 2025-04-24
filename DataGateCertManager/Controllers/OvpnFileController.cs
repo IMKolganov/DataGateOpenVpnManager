@@ -8,7 +8,6 @@ namespace DataGateCertManager.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 public class OvpnFileController(
-    IEasyRsaService easyRsaService,
     IOvpnFileService ovpnFileService,
     IConfiguration configuration,
     ILogger<OvpnFileController> logger)
@@ -18,10 +17,28 @@ public class OvpnFileController(
     public async Task<IActionResult> AddOvpnFile([FromBody] AddOvpnFileRequest request,
         CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException();
-        var mainPath = configuration["EasyRsa:MainPath"] 
-                       ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
-        // ovpnFileService.AddOvpnFile()
+        try
+        {
+            var mainPath = configuration["EasyRsa:MainPath"] 
+                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+
+            var result = await ovpnFileService.AddOvpnFile(
+                mainPath,
+                request.CommonName,
+                request.ConfigTemplate,
+                request.ServerIp,
+                request.ServerPort,
+                HttpContext.RequestAborted,
+                request.IssuedTo,
+                request.OvpnFileExpireDays);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error added new ovpn file for {CommonName}", request.CommonName);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("RevokeOvpnFile")]

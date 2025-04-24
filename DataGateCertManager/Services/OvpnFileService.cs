@@ -10,15 +10,18 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
     : IOvpnFileService
 {
     public async Task<IssuedOvpnFile> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
-        string serverIp, int serverPort,
-        CancellationToken cancellationToken, string issuedTo = "openVpnClient")
+        string serverIp, int serverPort, CancellationToken cancellationToken, 
+        string issuedTo = "openVpnClient", int certExpireDays = 365)
     {
+        easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var unixStylePath = ConvertToBashPath(easyRsaPath);
+        
         var ovpnFileDir = "OvpnFiles";
         logger.LogInformation("Step 1: Building client certificate...");
-        var certResult = await easyRsaService.BuildCertificateAsync("easyRsaPath", 
-            cancellationToken, commonName);
+        var certResult = await easyRsaService.BuildCertificateAsync(easyRsaPath, 
+            cancellationToken, commonName, certExpireDays);
 
-        var caCertPath = Path.Combine(easyRsaPath, "ca.crt");
+        var caCertPath = Path.Combine(easyRsaPath, "pki", "ca.crt");
         var caCertContent = await ReadPemContentAsync(
                 caCertPath ?? throw new InvalidOperationException("CaCertPath is null."),
                 cancellationToken);
@@ -28,7 +31,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         var clientKeyContent =
             await ReadPemContentAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
                 cancellationToken);
-        var taCertPath = Path.Combine(easyRsaPath, "ta.crt");
+        var taCertPath = Path.Combine(easyRsaPath, "pki", "ta.crt");
         var taCertContent =
             await  ReadPemContentAsync(taCertPath ?? throw new InvalidOperationException("TaCertPath is null."),
                 cancellationToken);
