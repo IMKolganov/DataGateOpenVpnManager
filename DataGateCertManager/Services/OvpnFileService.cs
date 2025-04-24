@@ -76,7 +76,6 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         CancellationToken cancellationToken)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
         var serverCertificate = await easyRsaService.RevokeCertificateAsync(
             easyRsaPath, commonName, cancellationToken);
         
@@ -183,29 +182,5 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             .Replace("{{client_cert}}", clientCert)
             .Replace("{{client_key}}", clientKey)
             .Replace("{{tls_auth_key}}", tlsAuthKey);
-    }
-    
-    private static readonly Regex BashPathRegex = new(@"^(/mnt/[a-z]|/[a-z])/", 
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static string ConvertToBashPath(string windowsPath)
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return windowsPath;
-        
-        if (BashPathRegex.IsMatch(windowsPath))
-            return windowsPath;
-
-        var driveLetter = char.ToLower(windowsPath[0]);
-        var pathWithoutDrive = windowsPath.Substring(2).Replace('\\', '/');
-
-        return IsRunningInWsl()
-            ? $"/mnt/{driveLetter}{pathWithoutDrive}"
-            : $"/{driveLetter}{pathWithoutDrive}";
-    }
-    
-    private static bool IsRunningInWsl()
-    {
-        var os = RuntimeInformation.OSDescription.ToLower();
-        return os.Contains("microsoft") || os.Contains("wsl");
     }
 }

@@ -1,5 +1,5 @@
 ﻿using DataGateCertManager.Models;
-using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,7 +14,7 @@ public class OvpnFileController(
     : ControllerBase
 {
     [HttpPost("AddOvpnFile")]
-    public async Task<IActionResult> AddOvpnFile([FromBody] AddOvpnFileRequest request,
+    public async Task<ActionResult<IssuedOvpnFile>> AddOvpnFile([FromBody] AddOvpnFileRequest request,
         CancellationToken cancellationToken = default)
     {
         try
@@ -41,19 +41,50 @@ public class OvpnFileController(
         }
     }
 
-    [HttpPost("RevokeOvpnFile")]
-    public async Task<IActionResult> RevokeOvpnFile([FromBody] RevokeOvpnFileRequest request,
-        CancellationToken cancellationToken = default)
+    [HttpPost("RevokeOvpnFile/{commonName}")]
+    public async Task<IActionResult> RevokeOvpnFile(string commonName)
     {
-        throw new NotImplementedException();
+        try
+        {
+            var mainPath = configuration["EasyRsa:MainPath"] 
+                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+
+            var result = await ovpnFileService.RevokeOvpnFile(
+                mainPath,
+                commonName,
+                HttpContext.RequestAborted);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error revoke ovpn file for {CommonName}", commonName);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
-    [HttpPost("DownloadOvpnFile/")]
+    [HttpPost("DownloadOvpnFile")]
     public async Task<IActionResult> DownloadOvpnFile(
         [FromBody] DownloadOvpnFileRequest request,
         CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        try
+        {
+            var mainPath = configuration["EasyRsa:MainPath"] 
+                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+
+            var result = await ovpnFileService.GetOvpnFile(
+                request.FileName,
+                request.FilePath,
+                HttpContext.RequestAborted);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error download ovpn file for {CommonName}", request.CommonName);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }
 
