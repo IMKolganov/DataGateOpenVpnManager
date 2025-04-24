@@ -53,7 +53,7 @@ public class EasyRsaService(
 
         string command;
         
-        string env = $"EASYRSA_BATCH=1 EASYRSA_CERT_EXPIRE={certExpireDays}";
+        var env = $"EASYRSA_BATCH=1 EASYRSA_CERT_EXPIRE={certExpireDays}";
 
         if (File.Exists(reqPath))
         {
@@ -99,15 +99,6 @@ public class EasyRsaService(
         _logger.LogInformation("Certificate PEM path: {PemSerialPath}", pemSerialPath);
 
         return serverCertificate;
-    }
-
-    public async Task<string> ReadPemContentAsync(string filePath, CancellationToken cancellationToken)
-    {
-        var lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
-        return string.Join(Environment.NewLine, lines
-            .SkipWhile(line => !line.StartsWith("-----BEGIN CERTIFICATE-----"))
-            .TakeWhile(line => !line.StartsWith("-----END CERTIFICATE-----"))
-            .Append("-----END CERTIFICATE-----"));
     }
 
     public async Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,

@@ -1,4 +1,6 @@
-﻿using DataGateCertManager.Models.Dto;
+﻿using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using DataGateCertManager.Services.Interfaces;
 
@@ -7,27 +9,28 @@ namespace DataGateCertManager.Services;
 public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService easyRsaService)
     : IOvpnFileService
 {
-    public async Task<IssuedOvpnFile> AddOvpnFile(string easyRsaPath, string commonName, string ovpnFileDir, 
-        string configTemplate, string serverIp, int serverPort,
+    public async Task<IssuedOvpnFile> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
+        string serverIp, int serverPort,
         CancellationToken cancellationToken, string issuedTo = "openVpnClient")
     {
+        var ovpnFileDir = "OvpnFiles";
         logger.LogInformation("Step 1: Building client certificate...");
         var certResult = await easyRsaService.BuildCertificateAsync("easyRsaPath", 
             cancellationToken, commonName);
 
         var caCertPath = Path.Combine(easyRsaPath, "ca.crt");
-        var caCertContent = await easyRsaService.ReadPemContentAsync(
+        var caCertContent = await ReadPemContentAsync(
                 caCertPath ?? throw new InvalidOperationException("CaCertPath is null."),
                 cancellationToken);
-        var clientCertContent = await easyRsaService.ReadPemContentAsync(
+        var clientCertContent = await ReadPemContentAsync(
             certResult.CertificatePath ?? throw new InvalidOperationException("CertificatePath is null."), 
             cancellationToken);
         var clientKeyContent =
-            await File.ReadAllTextAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
+            await ReadPemContentAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
                 cancellationToken);
         var taCertPath = Path.Combine(easyRsaPath, "ta.crt");
         var taCertContent =
-            await File.ReadAllTextAsync(taCertPath ?? throw new InvalidOperationException("TaCertPath is null."),
+            await  ReadPemContentAsync(taCertPath ?? throw new InvalidOperationException("TaCertPath is null."),
                 cancellationToken);
         
         logger.LogInformation("Step 3: Generating .ovpn file...");
@@ -72,7 +75,8 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
     public async Task<IssuedOvpnFile?> RevokeOvpnFile(string easyRsaPath, string commonName, 
         CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var unixStylePath = ConvertToBashPath(easyRsaPath);
         var serverCertificate = await easyRsaService.RevokeCertificateAsync(
             easyRsaPath, commonName, cancellationToken);
         
@@ -140,6 +144,17 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         return revokedFilePath;
     }
     
+    private async Task<string> ReadPemContentAsync(string filePath, CancellationToken cancellationToken)
+    {
+        filePath = Path.GetFullPath(filePath);
+        var unixStylePath = ConvertToBashPath(filePath);
+        var lines = await File.ReadAllLinesAsync(unixStylePath, cancellationToken);
+        return string.Join(Environment.NewLine, lines
+            .SkipWhile(line => !line.StartsWith("-----BEGIN CERTIFICATE-----"))
+            .TakeWhile(line => !line.StartsWith("-----END CERTIFICATE-----"))
+            .Append("-----END CERTIFICATE-----"));
+    }
+    
     private static string GenerateOvpnFile(
         string configTemplate,
         string serverIp,
@@ -171,5 +186,29 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             .Replace("{{client_cert}}", clientCert)
             .Replace("{{client_key}}", clientKey)
             .Replace("{{tls_auth_key}}", tlsAuthKey);
+    }
+    
+    private static readonly Regex BashPathRegex = new(@"^(/mnt/[a-z]|/[a-z])/", 
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static string ConvertToBashPath(string windowsPath)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return windowsPath;
+        
+        if (BashPathRegex.IsMatch(windowsPath))
+            return windowsPath;
+
+        var driveLetter = char.ToLower(windowsPath[0]);
+        var pathWithoutDrive = windowsPath.Substring(2).Replace('\\', '/');
+
+        return IsRunningInWsl()
+            ? $"/mnt/{driveLetter}{pathWithoutDrive}"
+            : $"/{driveLetter}{pathWithoutDrive}";
+    }
+    
+    private static bool IsRunningInWsl()
+    {
+        var os = RuntimeInformation.OSDescription.ToLower();
+        return os.Contains("microsoft") || os.Contains("wsl");
     }
 }
