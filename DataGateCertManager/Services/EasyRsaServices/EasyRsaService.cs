@@ -1,7 +1,7 @@
 ﻿using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 
@@ -55,18 +55,6 @@ public class EasyRsaService : IEasyRsaService
         var pkiPath = Path.Combine(easyRsaPath, "pki");
         _logger.LogInformation("Starting certificate build for: {CommonName}", commonName);
 
-        var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
-        var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
-        var keyPath = Path.Combine(pkiPath, "private", $"{commonName}.key");
-
-        _logger.LogInformation("Expected paths:\nREQ: {ReqPath}\nCRT: {IssuedPath}\nKEY: {KeyPath}", reqPath,
-            issuedPath, keyPath);
-
-        if (File.Exists(reqPath))
-        {
-            _logger.LogWarning("WARNING: Request file already exists before EasyRSA run: {ReqPath}", reqPath);
-        }
-
         var command = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa build-client-full {commonName} nopass";
         _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
@@ -75,6 +63,7 @@ public class EasyRsaService : IEasyRsaService
 
         if (exitCode != 0)
         {
+            var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
             if (File.Exists(reqPath))
             {
                 _logger.LogWarning("Request file exists after failed EasyRSA run: {ReqPath}", reqPath);
@@ -87,41 +76,21 @@ public class EasyRsaService : IEasyRsaService
 
         _logger.LogInformation("Certificate generated successfully:\n{Output}", output);
 
-        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFileAsync(easyRsaPath, 
+        var serverCertificate = await MatchingCertsAsync(easyRsaPath, commonName, cancellationToken);
+        var serialFromOpenSsl = await CheckCertInOpensslAsync(serverCertificate.CertificatePath, 
             cancellationToken);
-        var matchingCerts = certificateInfoInIndexFile
-            .Where(x => 
-                x.Status == CertificateStatus.Active 
-                && x.CommonName == commonName)
-            .ToList();
 
-        if (!matchingCerts.Any())
-        {
-            throw new Exception($"Certificate not found in index.txt after generation. Expected: {issuedPath}");
-        }
-
-        var certInfo = matchingCerts.First();
-        var serialFromOpenSsl = await CheckCertInOpensslAsync(issuedPath, cancellationToken);
-
-        if (!certInfo.SerialNumber.Contains(serialFromOpenSsl))
+        if (!serverCertificate.SerialNumber.Contains(serialFromOpenSsl))
         {
             throw new Exception(
                 $"Certificate serial number mismatch. Expected in OpenSSL: {serialFromOpenSsl}, " +
-                $"Found in Index: {certInfo.SerialNumber}");
+                $"Found in Index: {serverCertificate.SerialNumber}");
         }
 
-        var pemSerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{certInfo.SerialNumber}.pem");
+        var pemSerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{serverCertificate.SerialNumber}.pem");
         _logger.LogInformation("Certificate PEM path: {PemSerialPath}", pemSerialPath);
 
-        return new ServerCertificate
-        {
-            SerialNumber = certInfo.SerialNumber,
-            CertificatePath = issuedPath,
-            CommonName = commonName,
-            ExpiryDate = DateTime.MaxValue,
-            IsRevoked = false,
-            Status = CertificateStatus.Active,
-        };
+        return serverCertificate;
     }
 
     public async Task<string> ReadPemContentAsync(string filePath, CancellationToken cancellationToken)
@@ -136,16 +105,11 @@ public class EasyRsaService : IEasyRsaService
     public async Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,
         CancellationToken cancellationToken)
     {
+        var serverCertificate = new ServerCertificate();
         easyRsaPath = Path.GetFullPath(easyRsaPath);
         var unixStylePath = ConvertToBashPath(easyRsaPath);
         var pkiPath = Path.Combine(easyRsaPath, "pki");
-
         var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
-        var certificateRevokeResult = new ServerCertificate
-        {
-            CertificatePath = issuedPath,
-            CommonName = commonName
-        };
 
         if (!File.Exists(issuedPath))
         {
@@ -158,28 +122,27 @@ public class EasyRsaService : IEasyRsaService
         var revokeCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa revoke {commonName}";
         var (output, error, exitCode) =
             await _easyRsaExecCommandService.RunCommandAsync(revokeCommand, cancellationToken);
-
+        
         if (exitCode == 0)
         {
-            certificateRevokeResult.IsRevoked = true;
-            certificateRevokeResult.Message = $"Certificate revoked successfully: {commonName}";
-            _logger.LogInformation(certificateRevokeResult.Message);
+            var serialNumber = ExtractSerialFromRevocationOutput(error) ?? string.Empty;
+            _logger.LogInformation("Certificate revoked successfully: " +
+                                   "{CommonName}, SerialNumber: {SerialNumber}, " +
+                                   "Output: {Output} Error: {Error}", commonName, serialNumber, output, error);
         }
         else
         {
-            certificateRevokeResult.IsRevoked = false;
-
             if (output.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase) ||
                 error.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase))
             {
-                certificateRevokeResult.Message = $"Certificate is already revoked: {commonName}";
-                _logger.LogWarning(certificateRevokeResult.Message);
+                serverCertificate.Message = $"Certificate is already revoked: {commonName}";
+                _logger.LogWarning("Certificate is already revoked: {CommonName}", commonName);
             }
             else if (output.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase) ||
                      error.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase))
             {
-                certificateRevokeResult.Message = $"Certificate not found: {commonName}";
-                _logger.LogWarning(certificateRevokeResult.Message);
+                serverCertificate.Message = $"Certificate not found: {commonName}";
+                _logger.LogWarning("Certificate not found: {CommonName}", commonName);
             }
             else
             {
@@ -193,7 +156,8 @@ public class EasyRsaService : IEasyRsaService
             _logger.LogInformation("CRL updated successfully.");
         }
 
-        return certificateRevokeResult;
+        serverCertificate = await MatchingCertsAsync(easyRsaPath, commonName, cancellationToken);
+        return serverCertificate;
     }
 
     public async Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFileAsync(string easyRsaPath,
@@ -287,7 +251,8 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var serial = certOutput.Split('=')[1].Trim();
-        _logger.LogInformation("Certificate serial retrieved:\n{Serial}\nFull OpenSSL response:\n{Output}", serial, certOutput);
+        _logger.LogInformation("Certificate serial retrieved:\n{Serial}\nFull OpenSSL response:\n{Output}", 
+            serial, certOutput);
         return serial;
     }
 
@@ -317,6 +282,23 @@ public class EasyRsaService : IEasyRsaService
         _logger.LogInformation("CRL successfully generated at: {CrlPath}", crlPath);
         return true;
     }
+
+    private async Task<ServerCertificate> MatchingCertsAsync(string easyRsaPath, string commonName,
+        CancellationToken cancellationToken)
+    {
+        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFileAsync(easyRsaPath, 
+            cancellationToken);
+        var matchingCerts = certificateInfoInIndexFile
+            .Where(x => x.CommonName == commonName)
+            .ToList();
+
+        if (!matchingCerts.Any())
+        {
+            throw new Exception($"Certificate not found in index.txt after generation.");
+        }
+
+        return matchingCerts.First();
+    }
     
     private static bool IsRunningInWsl()
     {
@@ -335,5 +317,11 @@ public class EasyRsaService : IEasyRsaService
         return IsRunningInWsl()
             ? $"/mnt/{driveLetter}{pathWithoutDrive}"
             : $"/{driveLetter}{pathWithoutDrive}";
+    }
+    
+    private static string? ExtractSerialFromRevocationOutput(string stderr)
+    {
+        var match = Regex.Match(stderr, @"Revoking Certificate (\w{16,})", RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value : null;
     }
 }
