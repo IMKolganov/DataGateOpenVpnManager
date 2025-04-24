@@ -29,16 +29,16 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             certResult.CertificatePath ?? throw new InvalidOperationException("CertificatePath is null."), 
             cancellationToken);
         var clientKeyContent =
-            await ReadPemContentAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
+            await File.ReadAllTextAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
                 cancellationToken);
-        var taCertPath = Path.Combine(easyRsaPath, "pki", "ta.crt");
-        var taCertContent =
-            await  ReadPemContentAsync(taCertPath ?? throw new InvalidOperationException("TaCertPath is null."),
+        var taKeyPath = Path.Combine(easyRsaPath, "pki", "ta.key");
+        var taKeyContent =
+            await  File.ReadAllTextAsync(taKeyPath ?? throw new InvalidOperationException("TaCertPath is null."),
                 cancellationToken);
         
         logger.LogInformation("Step 3: Generating .ovpn file...");
         var ovpnContent = GenerateOvpnFile(configTemplate, serverIp, serverPort, caCertContent, 
-            clientCertContent, clientKeyContent, taCertContent);
+            clientCertContent, clientKeyContent, taKeyContent);
 
         logger.LogInformation("Step 4: Writing .ovpn file...");
 
@@ -59,7 +59,6 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             throw new FileNotFoundException("OVPN file was not created as expected.", fileInfo.FullName);
         }
 
-        logger.LogInformation("Step 5: Saving metadata in database...");
         var issuedOvpnFile = new IssuedOvpnFile
         {
             CommonName = commonName,
@@ -72,7 +71,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             IsRevoked = false
         };
 
-        return new IssuedOvpnFile();
+        return issuedOvpnFile;
     }
 
     public async Task<IssuedOvpnFile?> RevokeOvpnFile(string easyRsaPath, string commonName, 
@@ -150,8 +149,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
     private async Task<string> ReadPemContentAsync(string filePath, CancellationToken cancellationToken)
     {
         filePath = Path.GetFullPath(filePath);
-        var unixStylePath = ConvertToBashPath(filePath);
-        var lines = await File.ReadAllLinesAsync(unixStylePath, cancellationToken);
+        var lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
         return string.Join(Environment.NewLine, lines
             .SkipWhile(line => !line.StartsWith("-----BEGIN CERTIFICATE-----"))
             .TakeWhile(line => !line.StartsWith("-----END CERTIFICATE-----"))
@@ -165,7 +163,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         string caCert,
         string clientCert,
         string clientKey,
-        string tlsAuthKeyPath)
+        string tlsAuthKey)
     {
         if (string.IsNullOrWhiteSpace(configTemplate))
             throw new ArgumentNullException(nameof(configTemplate));
@@ -177,10 +175,8 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             throw new ArgumentNullException(nameof(clientCert));
         if (string.IsNullOrWhiteSpace(clientKey))
             throw new ArgumentNullException(nameof(clientKey));
-        if (string.IsNullOrWhiteSpace(tlsAuthKeyPath))
-            throw new ArgumentNullException(nameof(tlsAuthKeyPath));
-
-        var tlsAuthKey = File.ReadAllText(tlsAuthKeyPath);
+        if (string.IsNullOrWhiteSpace(tlsAuthKey))
+            throw new ArgumentNullException(nameof(tlsAuthKey));
 
         return configTemplate
             .Replace("{{server_ip}}", serverIp)
