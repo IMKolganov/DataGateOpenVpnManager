@@ -136,68 +136,63 @@ public class EasyRsaService : IEasyRsaService
     public async Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,
         CancellationToken cancellationToken)
     {
-        var pkiPath = $"{easyRsaPath}/pki";
+        easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var unixStylePath = ConvertToBashPath(easyRsaPath);
+        var pkiPath = Path.Combine(easyRsaPath, "pki");
+
+        var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
         var certificateRevokeResult = new ServerCertificate
         {
-            CertificatePath = Path.Combine(pkiPath, "issued", $"{commonName}.crt")
+            CertificatePath = issuedPath,
+            CommonName = commonName
         };
-        if (!File.Exists(certificateRevokeResult.CertificatePath))
+
+        if (!File.Exists(issuedPath))
         {
-            _logger.LogInformation($"EasyRsa path: {easyRsaPath}");
-            _logger.LogInformation($"PKI path: {pkiPath}");
-            throw new Exception($"Certificate file not found: {certificateRevokeResult.CertificatePath}");
+            _logger.LogWarning("Certificate file not found: {Path}", issuedPath);
+            throw new FileNotFoundException($"Certificate file not found: {issuedPath}");
         }
 
-        _logger.LogInformation($"Attempting to revoke certificate for: {commonName}");
-        _logger.LogInformation($"EasyRsaPath: {easyRsaPath}");
-        _logger.LogInformation($"PKI Path: {pkiPath}");
-        _logger.LogInformation($"Certificate Path: {certificateRevokeResult.CertificatePath}");
+        _logger.LogInformation("Revoking certificate for: {CommonName}", commonName);
 
-        // Revoke the certificate
-        var revokeResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommandAsync($"revoke {commonName}",
-            easyRsaPath, cancellationToken, confirm: true);
-        certificateRevokeResult.IsRevoked = revokeResult.IsSuccess;
-        if (!certificateRevokeResult.IsRevoked)
+        var revokeCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa revoke {commonName}";
+        var (output, error, exitCode) =
+            await _easyRsaExecCommandService.RunCommandAsync(revokeCommand, cancellationToken);
+
+        if (exitCode == 0)
         {
-            switch (revokeResult.ExitCode)
+            certificateRevokeResult.IsRevoked = true;
+            certificateRevokeResult.Message = $"Certificate revoked successfully: {commonName}";
+            _logger.LogInformation(certificateRevokeResult.Message);
+        }
+        else
+        {
+            certificateRevokeResult.IsRevoked = false;
+
+            if (output.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase) ||
+                error.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase))
             {
-                case 0:
-                    certificateRevokeResult.Message += $"Certificate revoked successfully: {commonName}";
-                    _logger.LogInformation($"Certificate revoked successfully: {commonName}");
-                    break;
-
-                case 1:
-                    if (revokeResult.Output.Contains("ERROR:Already revoked")
-                        || revokeResult.Error.Contains("ERROR:Already revoked"))
-                    {
-                        certificateRevokeResult.Message += $"Certificate is already revoked: {commonName}";
-                        _logger.LogWarning($"Certificate is already revoked: {commonName}");
-                    }
-                    else if (revokeResult.Output.Contains("ERROR: Certificate not found")
-                             || revokeResult.Output.Contains("ERROR: Certificate not found"))
-                    {
-                        certificateRevokeResult.Message += $"Certificate not found: {commonName}";
-                        _logger.LogWarning($"Certificate not found: {commonName}");
-                    }
-                    else
-                    {
-                        throw new Exception($"Failed to revoke certificate. Unknown error: {commonName}, " +
-                                            $"ExitCode: {revokeResult.ExitCode}, Output: {revokeResult.Output}");
-                    }
-
-                    break;
-
-                default:
-                    throw new Exception($"Unexpected exit code ({revokeResult.ExitCode}) " +
-                                        $"while revoking certificate: {commonName}");
+                certificateRevokeResult.Message = $"Certificate is already revoked: {commonName}";
+                _logger.LogWarning(certificateRevokeResult.Message);
+            }
+            else if (output.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase) ||
+                     error.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase))
+            {
+                certificateRevokeResult.Message = $"Certificate not found: {commonName}";
+                _logger.LogWarning(certificateRevokeResult.Message);
+            }
+            else
+            {
+                throw new Exception($"Unknown error during revocation. ExitCode: {exitCode}, Output: {output}");
             }
         }
 
-        _logger.LogInformation("Revocation successful. Generating CRL...");
+        _logger.LogInformation("Generating updated CRL...");
         if (await UpdateCrlAsync(easyRsaPath, cancellationToken))
-            _logger.LogInformation("CRL successfully updated and deployed.");
+        {
+            _logger.LogInformation("CRL updated successfully.");
+        }
 
-        _logger.LogInformation("Certificate successfully revoked, CRL updated and deployed.");
         return certificateRevokeResult;
     }
 
@@ -298,23 +293,28 @@ public class EasyRsaService : IEasyRsaService
 
     private async Task<bool> UpdateCrlAsync(string easyRsaPath, CancellationToken cancellationToken)
     {
-        var crlPath = $"{easyRsaPath}/pki/crl.pem";
-        var crlResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommandAsync(
-            "gen-crl", easyRsaPath, cancellationToken);
-        if (!crlResult.IsSuccess)
+        easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var unixStylePath = ConvertToBashPath(easyRsaPath);
+        var crlPath = Path.Combine(easyRsaPath, "pki", "crl.pem");
+
+        var command = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa gen-crl";
+        _logger.LogInformation("Executing EasyRSA CRL generation command: {Command}", command);
+
+        var (output, error, exitCode) = await _easyRsaExecCommandService.RunCommandAsync(command, 
+            cancellationToken);
+
+        if (exitCode != 0)
         {
-            _logger.LogInformation($"Command Output: {crlResult.Output}");
-            throw new Exception($"Failed to generate CRL: {crlResult.Error}");
+            _logger.LogError("CRL generation failed. Output: {Output}, Error: {Error}", output, error);
+            throw new Exception($"Failed to generate CRL. Error: {error}");
         }
 
         if (!File.Exists(crlPath))
         {
-            //todo: think about it and maybe use path from output
-            throw new Exception($"Generated CRL not found at {crlPath}, Command Output: {crlResult.Output}");
+            throw new FileNotFoundException($"Generated CRL not found at {crlPath}. Command output: {output}");
         }
 
-        _logger.LogInformation($"Generating CRL File: {crlPath}");
-
+        _logger.LogInformation("CRL successfully generated at: {CrlPath}", crlPath);
         return true;
     }
     

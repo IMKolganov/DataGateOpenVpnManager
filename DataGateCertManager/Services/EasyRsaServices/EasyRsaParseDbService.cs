@@ -39,7 +39,8 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
                         RevokeDate = !string.IsNullOrEmpty(parts[2]) ? ParseDate(parts[2]) : DateTime.MinValue,
                         SerialNumber = parts[3],
                         UnknownField = parts[4],
-                        CommonName = parts[5].StartsWith("/CN=") ? parts[5][4..] : parts[5]
+                        CommonName = parts[5].StartsWith("/CN=") ? parts[5][4..] : parts[5],
+                        IsRevoked = !string.IsNullOrEmpty(parts[2]),
                     });
                 }
             }
