@@ -14,9 +14,8 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         string issuedTo = "openVpnClient", int certExpireDays = 365)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
         
-        var ovpnFileDir = "OvpnFiles";
+        var ovpnFileDir = Path.Combine(easyRsaPath, "pki", "ovpn_files");
         logger.LogInformation("Step 1: Building client certificate...");
         var certResult = await easyRsaService.BuildCertificateAsync(easyRsaPath, 
             cancellationToken, commonName, certExpireDays);
@@ -62,13 +61,12 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         var issuedOvpnFile = new IssuedOvpnFile
         {
             CommonName = commonName,
-            // CertId = certResult.CertId,//todo: check
             FileName = fileInfo.Name,
             FilePath = fileInfo.FullName,
             IssuedAt = DateTime.UtcNow,
             IssuedTo = issuedTo,
             CertFilePath = certResult.CertificatePath,
-            IsRevoked = false
+            KeyFilePath = certResult.KeyPath,
         };
 
         return issuedOvpnFile;
