@@ -20,7 +20,7 @@ public static class ServiceConfiguration
         services.AddScoped<IBashCommandRunner, BashCommandRunner>();
         
         // OpenVpn services
-        services.AddScoped<IOvpnFileService, OvpnFileService>();
+        services.AddScoped<IOpenVpnServerService, OpenVpnServerService>();
         
         services.AddRateLimiter(options =>
         {
