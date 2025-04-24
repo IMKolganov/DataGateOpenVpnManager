@@ -35,7 +35,7 @@ public class CertController(
     }
     
     [HttpPost("AddServerCertificate")]
-    public async Task<ActionResult<AddServerCertificateResponse>> AddServerCertificate(
+    public async Task<ActionResult<ServerCertificate>> AddServerCertificate(
         [FromBody] AddServerCertificateRequest request)
     {
         try
@@ -64,7 +64,7 @@ public class CertController(
     }
 
     [HttpPost("RevokeCertificate/{commonName}")]
-    public async Task<ActionResult<CertificateRevokeResponse>> RevokeCertificate(string commonName)
+    public async Task<ActionResult<ServerCertificate>> RevokeCertificate(string commonName)
     {
         try
         {
