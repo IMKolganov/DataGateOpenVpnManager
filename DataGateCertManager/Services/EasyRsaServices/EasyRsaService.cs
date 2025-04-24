@@ -47,28 +47,37 @@ public class EasyRsaService : IEasyRsaService
     #endregion
 
     public async Task<ServerCertificate> BuildCertificateAsync(string easyRsaPath, CancellationToken cancellationToken,
-        string commonName = "client1")
+        string commonName = "client1", int certExpireDays = 365)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
         var unixStylePath = ConvertToBashPath(easyRsaPath);
 
         var pkiPath = Path.Combine(easyRsaPath, "pki");
+        var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
+
         _logger.LogInformation("Starting certificate build for: {CommonName}", commonName);
 
-        var command = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa build-client-full {commonName} nopass";
+        string command;
+        
+        string env = $"EASYRSA_BATCH=1 EASYRSA_CERT_EXPIRE={certExpireDays}";
+
+        if (File.Exists(reqPath))
+        {
+            _logger.LogWarning(
+                "Request file already exists: {ReqPath}. Using existing request to sign new certificate.", reqPath);
+            command = $"cd \"{unixStylePath}\" && {env} ./easyrsa sign client {commonName}";
+        }
+        else
+        {
+            command = $"cd \"{unixStylePath}\" && {env} ./easyrsa build-client-full {commonName} nopass";
+        }
+        
         _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
-        var (output, error, exitCode) = await _easyRsaExecCommandService.RunCommandAsync(command, 
-            cancellationToken);
+        var (output, error, exitCode) = await _easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
 
         if (exitCode != 0)
         {
-            var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
-            if (File.Exists(reqPath))
-            {
-                _logger.LogWarning("Request file exists after failed EasyRSA run: {ReqPath}", reqPath);
-            }
-
             _logger.LogError("EasyRSA output:\n{Output}", output);
             _logger.LogError("EasyRSA error:\n{Error}", error);
             throw new Exception($"Error while building certificate: {error}. Output: {output}");
@@ -76,9 +85,14 @@ public class EasyRsaService : IEasyRsaService
 
         _logger.LogInformation("Certificate generated successfully:\n{Output}", output);
 
-        var serverCertificate = await MatchingCertsAsync(easyRsaPath, commonName, cancellationToken);
-        var serialFromOpenSsl = await CheckCertInOpensslAsync(serverCertificate.CertificatePath, 
-            cancellationToken);
+        if (await UpdateCrlAsync(easyRsaPath, cancellationToken))
+        {
+            _logger.LogInformation("CRL updated successfully.");
+        }
+        var certPath = ExtractCertificatePathFromOutput(output);
+        var serialFromOpenSsl = await CheckCertInOpensslAsync(certPath, cancellationToken);
+        var serverCertificate = await MatchingCertsAsync(easyRsaPath, serialFromOpenSsl, commonName, cancellationToken);
+        
 
         if (!serverCertificate.SerialNumber.Contains(serialFromOpenSsl))
         {
@@ -106,6 +120,7 @@ public class EasyRsaService : IEasyRsaService
         CancellationToken cancellationToken)
     {
         var serverCertificate = new ServerCertificate();
+        var serialNumber = string.Empty;
         easyRsaPath = Path.GetFullPath(easyRsaPath);
         var unixStylePath = ConvertToBashPath(easyRsaPath);
         var pkiPath = Path.Combine(easyRsaPath, "pki");
@@ -125,7 +140,7 @@ public class EasyRsaService : IEasyRsaService
         
         if (exitCode == 0)
         {
-            var serialNumber = ExtractSerialFromRevocationOutput(error) ?? string.Empty;
+            serialNumber = ExtractSerialFromRevocationOutput(error) ?? string.Empty;
             _logger.LogInformation("Certificate revoked successfully: " +
                                    "{CommonName}, SerialNumber: {SerialNumber}, " +
                                    "Output: {Output} Error: {Error}", commonName, serialNumber, output, error);
@@ -156,7 +171,7 @@ public class EasyRsaService : IEasyRsaService
             _logger.LogInformation("CRL updated successfully.");
         }
 
-        serverCertificate = await MatchingCertsAsync(easyRsaPath, commonName, cancellationToken);
+        serverCertificate = await MatchingCertsAsync(easyRsaPath, serialNumber, commonName, cancellationToken);
         return serverCertificate;
     }
 
@@ -283,13 +298,13 @@ public class EasyRsaService : IEasyRsaService
         return true;
     }
 
-    private async Task<ServerCertificate> MatchingCertsAsync(string easyRsaPath, string commonName,
+    private async Task<ServerCertificate> MatchingCertsAsync(string easyRsaPath, string serialNumber, string commonName,
         CancellationToken cancellationToken)
     {
         var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFileAsync(easyRsaPath, 
             cancellationToken);
         var matchingCerts = certificateInfoInIndexFile
-            .Where(x => x.CommonName == commonName)
+            .Where(x => x.SerialNumber == serialNumber& x.CommonName == commonName)
             .ToList();
 
         if (!matchingCerts.Any())
@@ -306,9 +321,14 @@ public class EasyRsaService : IEasyRsaService
         return os.Contains("microsoft") || os.Contains("wsl");
     }
 
+    private static readonly Regex BashPathRegex = new(@"^(/mnt/[a-z]|/[a-z])/", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static string ConvertToBashPath(string windowsPath)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return windowsPath;
+        
+        if (BashPathRegex.IsMatch(windowsPath))
             return windowsPath;
 
         var driveLetter = char.ToLower(windowsPath[0]);
@@ -323,5 +343,25 @@ public class EasyRsaService : IEasyRsaService
     {
         var match = Regex.Match(stderr, @"Revoking Certificate (\w{16,})", RegexOptions.IgnoreCase);
         return match.Success ? match.Groups[1].Value : null;
+    }
+    private static string? ExtractCertificatePathFromOutput(string output)
+    {
+        const string marker = "Certificate created at:";
+    
+        using var reader = new StringReader(output);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            if (line.StartsWith(marker))
+            {
+                var nextLine = reader.ReadLine();
+                if (nextLine != null && nextLine.Trim().StartsWith("*"))
+                {
+                    return nextLine.Trim().TrimStart('*', ' ');
+                }
+            }
+        }
+
+        return null;
     }
 }

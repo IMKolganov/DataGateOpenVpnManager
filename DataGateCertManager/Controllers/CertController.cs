@@ -42,11 +42,17 @@ public class CertController(
         {
             var easyRsaPath = configuration["EasyRsa:MainPath"] 
                 ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+            
+            if (request.CertExpireDays <= 0)
+            {
+                request.CertExpireDays = 365;
+            }
 
             var result = await easyRsaService.BuildCertificateAsync(
                 easyRsaPath,
                 HttpContext.RequestAborted,
-                request.CommonName);
+                request.CommonName,
+                request.CertExpireDays);
 
             return Ok(result);
         }
