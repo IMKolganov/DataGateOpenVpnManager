@@ -70,9 +70,6 @@ public class OvpnFileController(
     {
         try
         {
-            var mainPath = configuration["EasyRsa:MainPath"] 
-                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
-
             var result = await ovpnFileService.GetOvpnFile(
                 request.FileName,
                 request.FilePath,
