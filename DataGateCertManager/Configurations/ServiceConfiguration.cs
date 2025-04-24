@@ -19,6 +19,9 @@ public static class ServiceConfiguration
         services.AddScoped<IEasyRsaExecCommandService, EasyRsaExecCommandService>();
         services.AddScoped<IBashCommandRunner, BashCommandRunner>();
         
+        // OpenVpn services
+        services.AddScoped<IOvpnFileService, OvpnFileService>();
+        
         services.AddRateLimiter(options =>
         {
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
