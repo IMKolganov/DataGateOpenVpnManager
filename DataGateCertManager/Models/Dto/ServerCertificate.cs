@@ -10,7 +10,8 @@ public class ServerCertificate
     public string UnknownField { get; set; } = string.Empty;
     public bool IsRevoked { get; set; }
     public string Message { get; set; } = string.Empty;
-    public string CertificatePath {get; set; } = string.Empty;
+    public string CertificatePath { get; set; } = string.Empty;
+    public string KeyPath { get; set; } = string.Empty;
     public DateTime ExpiryDate { get; set; } = DateTime.MinValue;
     public DateTime? RevokeDate { get; set; }
 }

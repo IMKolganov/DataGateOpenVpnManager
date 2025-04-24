@@ -14,17 +14,29 @@ public class OvpnFileService : IOvpnFileService
         _easyRsaService = easyRsaService;
     }
 
-    public async Task<IssuedOvpnFile> AddOvpnFile(string externalId, string commonName, string ovpnFileDir, 
+    public async Task<IssuedOvpnFile> AddOvpnFile(string easyRsaPath, string commonName, string ovpnFileDir, 
+        string configTemplate, string serverIp, int serverPort,
         CancellationToken cancellationToken, string issuedTo = "openVpnClient")
     {
         _logger.LogInformation("Step 1: Building client certificate...");
         var certResult = await _easyRsaService.BuildCertificateAsync("easyRsaPath", 
             cancellationToken, commonName);
 
+        var caCertPath = Path.Combine(easyRsaPath, "ca.crt");
+        var caCertContent = await _easyRsaService.ReadPemContentAsync(
+                caCertPath ?? throw new InvalidOperationException("CaCertPath is null."),
+                cancellationToken);
+        var clientCertContent = await _easyRsaService.ReadPemContentAsync(
+            certResult.CertificatePath ?? throw new InvalidOperationException("CertificatePath is null."), 
+            cancellationToken);
+        var clientKeyContent =
+            await File.ReadAllTextAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
+                cancellationToken);
+
         _logger.LogInformation("Step 3: Generating .ovpn file...");
-        var ovpnContent = GenerateOvpnFile("configTemplate",
-            "serverIp", 0, "caCert", "clientCert", 
-            "clientKey", "tlsAuthKeyPath");
+        var ovpnContent = GenerateOvpnFile(configTemplate,
+            serverIp, serverPort, caCertContent, clientCertContent, 
+            clientKeyContent, "tlsAuthKeyPath");
 
         _logger.LogInformation("Step 4: Writing .ovpn file...");
 
@@ -48,7 +60,6 @@ public class OvpnFileService : IOvpnFileService
         _logger.LogInformation("Step 5: Saving metadata in database...");
         var issuedOvpnFile = new IssuedOvpnFile
         {
-            ExternalId = externalId,
             CommonName = commonName,
             // CertId = certResult.CertId,//todo: check
             FileName = fileInfo.Name,

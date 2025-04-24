@@ -4,7 +4,6 @@ namespace DataGateCertManager.Models.Dto;
 
 public class IssuedOvpnFile
 {
-    public string ExternalId { get; set; } = string.Empty;
     [Required]
     public string CommonName { get; set; } = null!;
     public string? CertId { get; set; } = string.Empty;

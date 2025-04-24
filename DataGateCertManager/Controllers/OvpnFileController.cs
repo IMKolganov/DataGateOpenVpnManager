@@ -1,5 +1,6 @@
 ﻿using DataGateCertManager.Models;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+using DataGateCertManager.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataGateCertManager.Controllers;
@@ -8,6 +9,7 @@ namespace DataGateCertManager.Controllers;
 [Route("api/[controller]")]
 public class OvpnFileController(
     IEasyRsaService easyRsaService,
+    IOvpnFileService ovpnFileService,
     IConfiguration configuration,
     ILogger<OvpnFileController> logger)
     : ControllerBase
@@ -17,6 +19,9 @@ public class OvpnFileController(
         CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
+        var mainPath = configuration["EasyRsa:MainPath"] 
+                       ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+        // ovpnFileService.AddOvpnFile()
     }
 
     [HttpPost("RevokeOvpnFile")]

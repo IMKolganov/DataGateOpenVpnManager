@@ -34,7 +34,7 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
                     var isRevoked = !string.IsNullOrEmpty(parts[2]);
                     var serial = parts[3];
 
-                    var certPath = ResolveCertificatePath(pkiPath, commonName, serial, isRevoked);
+                    var (certPath, keyPath) = ResolveCertificateAndKeyPaths(pkiPath, commonName, serial, isRevoked);
 
                     result.Add(new ServerCertificate
                     {
@@ -45,7 +45,8 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
                         UnknownField = parts[4],
                         CommonName = commonName,
                         IsRevoked = isRevoked,
-                        CertificatePath = certPath
+                        CertificatePath = certPath,
+                        KeyPath = keyPath
                     });
                 }
             }
@@ -59,33 +60,41 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
         }
     }
     
-    private string ResolveCertificatePath(string pkiPath, string commonName, string serial, bool isRevoked)
+    private (string certPath, string keyPath) ResolveCertificateAndKeyPaths(string pkiPath, string commonName, 
+        string serial, bool isRevoked)
     {
-        var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
-        var revokedPath = Path.Combine(pkiPath, "revoked", $"{commonName}.crt");
-        var serialPath = Path.Combine(pkiPath, "certs_by_serial", $"{serial}.pem");
+        var issuedCertPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
+        var revokedCertPath = Path.Combine(pkiPath, "revoked", $"{commonName}.crt");
+        var certsBySerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{serial}.pem");
 
-        string? resolvedPath = null;
+        var keyPath = Path.Combine(pkiPath, "private", $"{commonName}.key");
+
+        string? resolvedCertPath = null;
 
         if (isRevoked)
         {
-            if (File.Exists(revokedPath))
-                resolvedPath = revokedPath;
-            else if (File.Exists(serialPath))
-                resolvedPath = serialPath;
+            if (File.Exists(revokedCertPath))
+                resolvedCertPath = revokedCertPath;
+            else if (File.Exists(certsBySerialPath))
+                resolvedCertPath = certsBySerialPath;
         }
         else
         {
-            if (File.Exists(issuedPath))
-                resolvedPath = issuedPath;
+            if (File.Exists(issuedCertPath))
+                resolvedCertPath = issuedCertPath;
         }
 
-        if (resolvedPath == null)
+        if (resolvedCertPath == null)
         {
             logger.LogWarning("Certificate file not found for CommonName={CommonName}, Serial={Serial}", commonName, serial);
         }
 
-        return resolvedPath ?? string.Empty;
+        if (!File.Exists(keyPath))
+        {
+            logger.LogWarning("Private key file not found for CommonName={CommonName}", commonName);
+        }
+
+        return (resolvedCertPath ?? string.Empty, File.Exists(keyPath) ? keyPath : string.Empty);
     }
 
     private static CertificateStatus ParseStatus(string status)
