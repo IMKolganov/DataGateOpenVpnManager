@@ -9,5 +9,5 @@ public interface IEasyRsaService
     Task<string> ReadPemContent(string filePath, CancellationToken cancellationToken);
     Task<ServerCertificate> RevokeCertificate(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
-    Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string pkiPath, CancellationToken cancellationToken);
+    Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string easyRsaPath, CancellationToken cancellationToken);
 }

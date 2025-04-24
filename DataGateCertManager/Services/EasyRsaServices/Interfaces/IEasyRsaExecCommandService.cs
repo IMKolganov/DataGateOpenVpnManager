@@ -2,11 +2,11 @@
 
 public interface IEasyRsaExecCommandService
 {
-    Task<(bool IsSuccess, string Output, int ExitCode, string Error)> ExecuteEasyRsaCommand(string arguments,
+    Task<(bool IsSuccess, string Output, int ExitCode, string Error)> ExecuteEasyRsaCommandAsync(string arguments,
         string easyRsaPath,
         CancellationToken cancellationToken,
         bool confirm = false);
         
-    Task<(string Output, string Error, int ExitCode)> RunCommand(string command,
+    Task<(string Output, string Error, int ExitCode)> RunCommandAsync(string command,
         CancellationToken cancellationToken);
 }

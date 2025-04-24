@@ -13,6 +13,12 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
         CancellationToken cancellationToken)
     {
         var indexFilePath = Path.Combine(pkiPath, Filename);
+
+        if (!File.Exists(indexFilePath))
+        {
+            throw new FileNotFoundException(indexFilePath);
+        }
+        
         var result = new List<ServerCertificate>();
 
         try

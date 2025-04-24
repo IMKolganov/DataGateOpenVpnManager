@@ -1,7 +1,7 @@
-﻿using DataGateCertManager.Models;
-using DataGateCertManager.Models.Dto;
+﻿using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+using System.Runtime.InteropServices;
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 
@@ -70,7 +70,7 @@ public class EasyRsaService : IEasyRsaService
         _logger.LogInformation($"Executing EasyRSA command: {command}");
 
         var (output, error, exitCode) =
-            await _easyRsaExecCommandService.RunCommand(command, cancellationToken);
+            await _easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
 
         if (exitCode != 0)
         {
@@ -148,7 +148,7 @@ public class EasyRsaService : IEasyRsaService
         _logger.LogInformation($"Certificate Path: {certificateRevokeResult.CertificatePath}");
 
         // Revoke the certificate
-        var revokeResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand($"revoke {commonName}",
+        var revokeResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommandAsync($"revoke {commonName}",
             easyRsaPath, cancellationToken, confirm: true);
         certificateRevokeResult.IsRevoked = revokeResult.IsSuccess;
         if (!certificateRevokeResult.IsRevoked)
@@ -195,24 +195,77 @@ public class EasyRsaService : IEasyRsaService
         return certificateRevokeResult;
     }
 
-    public async Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string pkiPath,
+    public async Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string easyRsaPath,
         CancellationToken cancellationToken)
     {
-        return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(pkiPath, cancellationToken);
+        var fullEasyRsaPath = Path.GetFullPath(easyRsaPath);
+        var fullEasyRsaPkiPath = Path.Combine(fullEasyRsaPath, "pki");
+        
+        if (!Directory.Exists(fullEasyRsaPkiPath))
+        {
+            await InstallEasyRsa(fullEasyRsaPath, cancellationToken);
+        }
+        
+        return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(fullEasyRsaPkiPath, cancellationToken);
     }
 
-    private void InstallEasyRsa(string easyRsaPath, CancellationToken cancellationToken)
+    private async Task InstallEasyRsa(string easyRsaPath, CancellationToken cancellationToken)
     {
-        if (!Directory.Exists(easyRsaPath))
+        _logger.LogInformation("Initializing EasyRSA...");
+
+        var unixStylePath = ConvertToBashPath(easyRsaPath);
+        var scriptPath = Path.Combine(easyRsaPath, "easyrsa");
+
+        if (!File.Exists(scriptPath))
+            throw new FileNotFoundException($"EasyRSA script not found at: {scriptPath}");
+
+        try
         {
-            _logger.LogInformation("PKI directory does not exist. Initializing PKI...");
-            _easyRsaExecCommandService.RunCommand(
-                $"cd {easyRsaPath} && EASYRSA_BATCH=1 ./easyrsa init-pki", cancellationToken);
-            throw new Exception("PKI directory does not exist.");
+            var chmodCommand = $"chmod +x \"{unixStylePath}/easyrsa\"";
+            await _easyRsaExecCommandService.RunCommandAsync(chmodCommand, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"chmod failed: {ex.Message}");
+        }
+
+        var caPath = Path.Combine(easyRsaPath, "pki", "ca.crt");
+        var isPkiDirExists = Directory.Exists(Path.Combine(easyRsaPath, "pki"));
+
+        if (!isPkiDirExists)
+        {
+            var initCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa init-pki";
+            _logger.LogInformation("Running EasyRSA init-pki...");
+
+            var (initOut, initErr, initExit) =
+                await _easyRsaExecCommandService.RunCommandAsync(initCommand, cancellationToken);
+            if (initExit != 0)
+            {
+                _logger.LogError("init-pki failed. Output: {Output}, Error: {Error}", initOut, initErr);
+                throw new Exception($"Failed to initialize PKI. Error: {initErr}");
+            }
+
+            _logger.LogInformation("PKI initialized successfully");
+        }
+
+        if (!File.Exists(caPath))
+        {
+            var buildCaCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa build-ca nopass";
+            _logger.LogInformation("No CA certificate found. Running build-ca...");
+
+            var (caOut, caErr, caExit) =
+                await _easyRsaExecCommandService.RunCommandAsync(buildCaCommand, cancellationToken);
+            if (caExit != 0)
+            {
+                _logger.LogError("build-ca failed. Output: {Output}, Error: {Error}", caOut, caErr);
+                throw new Exception($"Failed to build CA certificate. Error: {caErr}");
+            }
+
+            _logger.LogInformation("CA certificate created successfully");
         }
         else
         {
-            _logger.LogInformation("PKI directory exists. Skipping initialization...");
+            _logger.LogInformation("CA certificate already exists. Skipping build-ca.");
         }
     }
 
@@ -220,7 +273,7 @@ public class EasyRsaService : IEasyRsaService
     {
         var certPathCommand = $"openssl x509 -in {certPath} -serial -noout";
         var (certOutput, certError, certExitCode) =
-            await _easyRsaExecCommandService.RunCommand(certPathCommand, cancellationToken);
+            await _easyRsaExecCommandService.RunCommandAsync(certPathCommand, cancellationToken);
 
         if (certExitCode != 0)
         {
@@ -236,7 +289,7 @@ public class EasyRsaService : IEasyRsaService
     private async Task<bool> UpdateCrl(string easyRsaPath, CancellationToken cancellationToken)
     {
         var crlPath = $"{easyRsaPath}/pki/crl.pem";
-        var crlResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommand(
+        var crlResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommandAsync(
             "gen-crl", easyRsaPath, cancellationToken);
         if (!crlResult.IsSuccess)
         {
@@ -253,5 +306,24 @@ public class EasyRsaService : IEasyRsaService
         _logger.LogInformation($"Generating CRL File: {crlPath}");
 
         return true;
+    }
+    
+    private static bool IsRunningInWsl()
+    {
+        var os = RuntimeInformation.OSDescription.ToLower();
+        return os.Contains("microsoft") || os.Contains("wsl");
+    }
+
+    private static string ConvertToBashPath(string windowsPath)
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return windowsPath;
+
+        var driveLetter = char.ToLower(windowsPath[0]);
+        var pathWithoutDrive = windowsPath.Substring(2).Replace('\\', '/');
+
+        return IsRunningInWsl()
+            ? $"/mnt/{driveLetter}{pathWithoutDrive}"
+            : $"/{driveLetter}{pathWithoutDrive}";
     }
 }
