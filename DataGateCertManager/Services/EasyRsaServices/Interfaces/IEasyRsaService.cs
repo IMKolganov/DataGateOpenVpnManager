@@ -4,10 +4,10 @@ namespace DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
 public interface IEasyRsaService
 {
-    Task<ServerCertificate> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
+    Task<ServerCertificate> BuildCertificateAsync(string easyRsaPath, CancellationToken cancellationToken,
         string baseFileName = "client1");
-    Task<string> ReadPemContent(string filePath, CancellationToken cancellationToken);
-    Task<ServerCertificate> RevokeCertificate(string easyRsaPath, string commonName,
+    Task<string> ReadPemContentAsync(string filePath, CancellationToken cancellationToken);
+    Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
-    Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string easyRsaPath, CancellationToken cancellationToken);
+    Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFileAsync(string easyRsaPath, CancellationToken cancellationToken);
 }

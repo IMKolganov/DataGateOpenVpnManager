@@ -46,71 +46,77 @@ public class EasyRsaService : IEasyRsaService
 
     #endregion
 
-    public async Task<ServerCertificate> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
+    public async Task<ServerCertificate> BuildCertificateAsync(string easyRsaPath, CancellationToken cancellationToken,
         string commonName = "client1")
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var unixStylePath = ConvertToBashPath(easyRsaPath);
 
         var pkiPath = Path.Combine(easyRsaPath, "pki");
-        _logger.LogInformation($"Starting certificate build for: {commonName}");
+        _logger.LogInformation("Starting certificate build for: {CommonName}", commonName);
 
         var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
         var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
         var keyPath = Path.Combine(pkiPath, "private", $"{commonName}.key");
 
-        _logger.LogInformation($"Expected paths:\nREQ: {reqPath}\nCRT: {issuedPath}\nKEY: {keyPath}");
+        _logger.LogInformation("Expected paths:\nREQ: {ReqPath}\nCRT: {IssuedPath}\nKEY: {KeyPath}", reqPath,
+            issuedPath, keyPath);
 
         if (File.Exists(reqPath))
         {
-            _logger.LogWarning($"WARNING: Request file already exists before EasyRSA run: {reqPath}");
+            _logger.LogWarning("WARNING: Request file already exists before EasyRSA run: {ReqPath}", reqPath);
         }
 
-        var command =
-            $"cd {easyRsaPath.Replace('\\', '/')} && ./easyrsa --batch build-client-full {commonName} nopass";
-        _logger.LogInformation($"Executing EasyRSA command: {command}");
+        var command = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa build-client-full {commonName} nopass";
+        _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
-        var (output, error, exitCode) =
-            await _easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
+        var (output, error, exitCode) = await _easyRsaExecCommandService.RunCommandAsync(command, 
+            cancellationToken);
 
         if (exitCode != 0)
         {
             if (File.Exists(reqPath))
             {
-                _logger.LogWarning($"Request file exists after failed EasyRSA run: {reqPath}");
+                _logger.LogWarning("Request file exists after failed EasyRSA run: {ReqPath}", reqPath);
             }
 
-            _logger.LogError($"EasyRSA output:\n{output}");
-            _logger.LogError($"EasyRSA error:\n{error}");
+            _logger.LogError("EasyRSA output:\n{Output}", output);
+            _logger.LogError("EasyRSA error:\n{Error}", error);
             throw new Exception($"Error while building certificate: {error}. Output: {output}");
         }
 
-        _logger.LogInformation($"Certificate generated successfully:\n{output}");
+        _logger.LogInformation("Certificate generated successfully:\n{Output}", output);
 
-        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFile(pkiPath, cancellationToken);
-        certificateInfoInIndexFile = certificateInfoInIndexFile
-            .Where(x => x.Status == CertificateStatus.Active && x.CommonName == commonName).ToList();
+        var certificateInfoInIndexFile = await GetAllCertificateInfoInIndexFileAsync(easyRsaPath, 
+            cancellationToken);
+        var matchingCerts = certificateInfoInIndexFile
+            .Where(x => 
+                x.Status == CertificateStatus.Active 
+                && x.CommonName == commonName)
+            .ToList();
 
-        if (certificateInfoInIndexFile.Count <= 0)
+        if (!matchingCerts.Any())
         {
-            throw new Exception($"Error certificate is not found in CA {issuedPath}");
+            throw new Exception($"Certificate not found in index.txt after generation. Expected: {issuedPath}");
         }
 
-        var certInfo = certificateInfoInIndexFile.First();
-        var serialFromOpenSsl = await CheckCertInOpenssl(issuedPath, cancellationToken);
+        var certInfo = matchingCerts.First();
+        var serialFromOpenSsl = await CheckCertInOpensslAsync(issuedPath, cancellationToken);
 
         if (!certInfo.SerialNumber.Contains(serialFromOpenSsl))
         {
-            throw new Exception($"Certificate serial number {certInfo.SerialNumber} is invalid.");
+            throw new Exception(
+                $"Certificate serial number mismatch. Expected in OpenSSL: {serialFromOpenSsl}, " +
+                $"Found in Index: {certInfo.SerialNumber}");
         }
 
         var pemSerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{certInfo.SerialNumber}.pem");
-
-        _logger.LogInformation($"Certificate PEM path: {pemSerialPath}");
+        _logger.LogInformation("Certificate PEM path: {PemSerialPath}", pemSerialPath);
 
         return new ServerCertificate
         {
             SerialNumber = certInfo.SerialNumber,
-            CertificatePath = issuedPath, 
+            CertificatePath = issuedPath,
             CommonName = commonName,
             ExpiryDate = DateTime.MaxValue,
             IsRevoked = false,
@@ -118,7 +124,7 @@ public class EasyRsaService : IEasyRsaService
         };
     }
 
-    public async Task<string> ReadPemContent(string filePath, CancellationToken cancellationToken)
+    public async Task<string> ReadPemContentAsync(string filePath, CancellationToken cancellationToken)
     {
         var lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
         return string.Join(Environment.NewLine, lines
@@ -127,7 +133,7 @@ public class EasyRsaService : IEasyRsaService
             .Append("-----END CERTIFICATE-----"));
     }
 
-    public async Task<ServerCertificate> RevokeCertificate(string easyRsaPath, string commonName,
+    public async Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,
         CancellationToken cancellationToken)
     {
         var pkiPath = $"{easyRsaPath}/pki";
@@ -188,14 +194,14 @@ public class EasyRsaService : IEasyRsaService
         }
 
         _logger.LogInformation("Revocation successful. Generating CRL...");
-        if (await UpdateCrl(easyRsaPath, cancellationToken))
+        if (await UpdateCrlAsync(easyRsaPath, cancellationToken))
             _logger.LogInformation("CRL successfully updated and deployed.");
 
         _logger.LogInformation("Certificate successfully revoked, CRL updated and deployed.");
         return certificateRevokeResult;
     }
 
-    public async Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFile(string easyRsaPath,
+    public async Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFileAsync(string easyRsaPath,
         CancellationToken cancellationToken)
     {
         var fullEasyRsaPath = Path.GetFullPath(easyRsaPath);
@@ -203,13 +209,13 @@ public class EasyRsaService : IEasyRsaService
         
         if (!Directory.Exists(fullEasyRsaPkiPath))
         {
-            await InstallEasyRsa(fullEasyRsaPath, cancellationToken);
+            await InstallEasyRsaAsync(fullEasyRsaPath, cancellationToken);
         }
         
         return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(fullEasyRsaPkiPath, cancellationToken);
     }
 
-    private async Task InstallEasyRsa(string easyRsaPath, CancellationToken cancellationToken)
+    private async Task InstallEasyRsaAsync(string easyRsaPath, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Initializing EasyRSA...");
 
@@ -269,9 +275,14 @@ public class EasyRsaService : IEasyRsaService
         }
     }
 
-    private async Task<string> CheckCertInOpenssl(string? certPath, CancellationToken cancellationToken)
+    private async Task<string> CheckCertInOpensslAsync(string? certPath, CancellationToken cancellationToken)
     {
-        var certPathCommand = $"openssl x509 -in {certPath} -serial -noout";
+        if (string.IsNullOrWhiteSpace(certPath))
+            throw new ArgumentException("Certificate path is null or empty");
+
+        var opensslPath = ConvertToBashPath(certPath);
+        var certPathCommand = $"openssl x509 -in \"{opensslPath}\" -serial -noout";
+
         var (certOutput, certError, certExitCode) =
             await _easyRsaExecCommandService.RunCommandAsync(certPathCommand, cancellationToken);
 
@@ -281,12 +292,11 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var serial = certOutput.Split('=')[1].Trim();
-        _logger.LogInformation($"Certificate serial retrieved:\n{serial} Full response: \n{certOutput}");
+        _logger.LogInformation("Certificate serial retrieved:\n{Serial}\nFull OpenSSL response:\n{Output}", serial, certOutput);
         return serial;
     }
 
-
-    private async Task<bool> UpdateCrl(string easyRsaPath, CancellationToken cancellationToken)
+    private async Task<bool> UpdateCrlAsync(string easyRsaPath, CancellationToken cancellationToken)
     {
         var crlPath = $"{easyRsaPath}/pki/crl.pem";
         var crlResult = await _easyRsaExecCommandService.ExecuteEasyRsaCommandAsync(

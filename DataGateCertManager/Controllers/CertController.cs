@@ -21,7 +21,7 @@ public class CertController(
             var pkiPath = configuration["EasyRsa:MainPath"] 
                           ?? throw new InvalidOperationException("EasyRsa:PkiPath configuration is missing");
 
-            var certificates = await easyRsaService.GetAllCertificateInfoInIndexFile(
+            var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(
                 pkiPath,
                 HttpContext.RequestAborted);
 
@@ -43,7 +43,7 @@ public class CertController(
             var easyRsaPath = configuration["EasyRsa:MainPath"] 
                 ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
 
-            var result = await easyRsaService.BuildCertificate(
+            var result = await easyRsaService.BuildCertificateAsync(
                 easyRsaPath,
                 HttpContext.RequestAborted,
                 request.CommonName);
@@ -65,7 +65,7 @@ public class CertController(
             var easyRsaPath = configuration["EasyRsa:MainPath"] 
                 ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
 
-            var result = await easyRsaService.RevokeCertificate(
+            var result = await easyRsaService.RevokeCertificateAsync(
                 easyRsaPath,
                 commonName,
                 HttpContext.RequestAborted);

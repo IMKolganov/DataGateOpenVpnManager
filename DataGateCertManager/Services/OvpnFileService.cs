@@ -18,7 +18,7 @@ public class OvpnFileService : IOvpnFileService
         CancellationToken cancellationToken, string issuedTo = "openVpnClient")
     {
         _logger.LogInformation("Step 1: Building client certificate...");
-        var certResult = await _easyRsaService.BuildCertificate("easyRsaPath", 
+        var certResult = await _easyRsaService.BuildCertificateAsync("easyRsaPath", 
             cancellationToken, commonName);
 
         _logger.LogInformation("Step 3: Generating .ovpn file...");
@@ -66,7 +66,7 @@ public class OvpnFileService : IOvpnFileService
         CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
-        var serverCertificate = await _easyRsaService.RevokeCertificate(
+        var serverCertificate = await _easyRsaService.RevokeCertificateAsync(
             easyRsaPath, commonName, cancellationToken);
         
         _logger.LogInformation("RevokeCertificate result: {Message} " +
