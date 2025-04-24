@@ -2,22 +2,16 @@
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using DataGateCertManager.Services.Interfaces;
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 
-public class EasyRsaService : IEasyRsaService
+public class EasyRsaService(
+    ILogger<IEasyRsaService> logger, IEasyRsaParseDbService easyRsaParseDbService, 
+    IEasyRsaExecCommandService easyRsaExecCommandService, IOpenVpnServerService openVpnServerService)
+    : IEasyRsaService
 {
-    private readonly ILogger<IEasyRsaService> _logger;
-    private readonly IEasyRsaParseDbService _easyRsaParseDbService;
-    private readonly IEasyRsaExecCommandService _easyRsaExecCommandService;
-
-    public EasyRsaService(ILogger<IEasyRsaService> logger, IEasyRsaParseDbService easyRsaParseDbService,
-        IEasyRsaExecCommandService easyRsaExecCommandService)
-    {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _easyRsaParseDbService = easyRsaParseDbService;
-        _easyRsaExecCommandService = easyRsaExecCommandService;
-    }
+    private readonly ILogger<IEasyRsaService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     #region easyrsa build-client-full
 
@@ -74,7 +68,7 @@ public class EasyRsaService : IEasyRsaService
         
         _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
-        var (output, error, exitCode) = await _easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
+        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
 
         if (exitCode != 0)
         {
@@ -136,7 +130,7 @@ public class EasyRsaService : IEasyRsaService
 
         var revokeCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa revoke {commonName}";
         var (output, error, exitCode) =
-            await _easyRsaExecCommandService.RunCommandAsync(revokeCommand, cancellationToken);
+            await easyRsaExecCommandService.RunCommandAsync(revokeCommand, cancellationToken);
         
         if (exitCode == 0)
         {
@@ -186,7 +180,7 @@ public class EasyRsaService : IEasyRsaService
             await InstallEasyRsaAsync(fullEasyRsaPath, cancellationToken);
         }
         
-        return await _easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(fullEasyRsaPkiPath, cancellationToken);
+        return await easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(fullEasyRsaPkiPath, cancellationToken);
     }
 
     private async Task InstallEasyRsaAsync(string easyRsaPath, CancellationToken cancellationToken)
@@ -202,7 +196,7 @@ public class EasyRsaService : IEasyRsaService
         try
         {
             var chmodCommand = $"chmod +x \"{unixStylePath}/easyrsa\"";
-            await _easyRsaExecCommandService.RunCommandAsync(chmodCommand, cancellationToken);
+            await easyRsaExecCommandService.RunCommandAsync(chmodCommand, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -210,6 +204,7 @@ public class EasyRsaService : IEasyRsaService
         }
 
         var caPath = Path.Combine(easyRsaPath, "pki", "ca.crt");
+        var taPath = Path.Combine(easyRsaPath, "pki", "ta.crt");
         var isPkiDirExists = Directory.Exists(Path.Combine(easyRsaPath, "pki"));
 
         if (!isPkiDirExists)
@@ -218,7 +213,7 @@ public class EasyRsaService : IEasyRsaService
             _logger.LogInformation("Running EasyRSA init-pki...");
 
             var (initOut, initErr, initExit) =
-                await _easyRsaExecCommandService.RunCommandAsync(initCommand, cancellationToken);
+                await easyRsaExecCommandService.RunCommandAsync(initCommand, cancellationToken);
             if (initExit != 0)
             {
                 _logger.LogError("init-pki failed. Output: {Output}, Error: {Error}", initOut, initErr);
@@ -234,7 +229,7 @@ public class EasyRsaService : IEasyRsaService
             _logger.LogInformation("No CA certificate found. Running build-ca...");
 
             var (caOut, caErr, caExit) =
-                await _easyRsaExecCommandService.RunCommandAsync(buildCaCommand, cancellationToken);
+                await easyRsaExecCommandService.RunCommandAsync(buildCaCommand, cancellationToken);
             if (caExit != 0)
             {
                 _logger.LogError("build-ca failed. Output: {Output}, Error: {Error}", caOut, caErr);
@@ -247,6 +242,11 @@ public class EasyRsaService : IEasyRsaService
         {
             _logger.LogInformation("CA certificate already exists. Skipping build-ca.");
         }
+
+        if (!File.Exists(taPath))
+        {
+            await openVpnServerService.BuildTlsAuthKeyAsync(easyRsaPath, cancellationToken);
+        }
     }
 
     private async Task<string> CheckCertInOpensslAsync(string? certPath, CancellationToken cancellationToken)
@@ -258,7 +258,7 @@ public class EasyRsaService : IEasyRsaService
         var certPathCommand = $"openssl x509 -in \"{opensslPath}\" -serial -noout";
 
         var (certOutput, certError, certExitCode) =
-            await _easyRsaExecCommandService.RunCommandAsync(certPathCommand, cancellationToken);
+            await easyRsaExecCommandService.RunCommandAsync(certPathCommand, cancellationToken);
 
         if (certExitCode != 0)
         {
@@ -280,7 +280,7 @@ public class EasyRsaService : IEasyRsaService
         var command = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa gen-crl";
         _logger.LogInformation("Executing EasyRSA CRL generation command: {Command}", command);
 
-        var (output, error, exitCode) = await _easyRsaExecCommandService.RunCommandAsync(command, 
+        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(command, 
             cancellationToken);
 
         if (exitCode != 0)
