@@ -1,5 +1,5 @@
 ﻿using System.Globalization;
-using DataGateCertManager.Models;
+using DataGateCertManager.Models.Dto;
 using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
@@ -9,31 +9,44 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
 {
     private const string Filename = "index.txt"; // TODO: Load from config if needed
 
-    public async Task<List<CertificateCaInfo>> ParseCertificateInfoInIndexFileAsync(string pkiPath, 
-        CancellationToken cancellationToken)
+    public async Task<List<ServerCertificate>> ParseCertificateInfoInIndexFileAsync(string pkiPath, CancellationToken cancellationToken)
     {
         var indexFilePath = Path.Combine(pkiPath, Filename);
-        var result = new List<CertificateCaInfo>();
+
+        if (!File.Exists(indexFilePath))
+            throw new FileNotFoundException(indexFilePath);
+
+        var result = new List<ServerCertificate>();
 
         try
         {
             var lines = await File.ReadAllLinesAsync(indexFilePath, cancellationToken);
-        
+
             foreach (var line in lines)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-            
+
                 var parts = line.Split('\t');
                 if (parts.Length >= 6)
                 {
-                    result.Add(new CertificateCaInfo
+                    var status = ParseStatus(parts[0]);
+                    var commonName = parts[5].StartsWith("/CN=") ? parts[5][4..] : parts[5];
+                    var isRevoked = !string.IsNullOrEmpty(parts[2]);
+                    var serial = parts[3];
+
+                    var (certPath, keyPath) = ResolveCertificateAndKeyPaths(pkiPath, commonName, serial, isRevoked);
+
+                    result.Add(new ServerCertificate
                     {
-                        Status = ParseStatus(parts[0]),
+                        Status = status,
                         ExpiryDate = ParseDate(parts[1]),
-                        RevokeDate = !string.IsNullOrEmpty(parts[2]) ? ParseDate(parts[2]) : DateTime.MinValue,
-                        SerialNumber = parts[3],
+                        RevokeDate = isRevoked ? ParseDate(parts[2]) : DateTime.MinValue,
+                        SerialNumber = serial,
                         UnknownField = parts[4],
-                        CommonName = parts[5].StartsWith("/CN=") ? parts[5][4..] : parts[5]
+                        CommonName = commonName,
+                        IsRevoked = isRevoked,
+                        CertificatePath = certPath,
+                        KeyPath = keyPath
                     });
                 }
             }
@@ -45,6 +58,43 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
             logger.LogError(ex, "Failed to parse certificate in index file");
             throw;
         }
+    }
+    
+    private (string certPath, string keyPath) ResolveCertificateAndKeyPaths(string pkiPath, string commonName, 
+        string serial, bool isRevoked)
+    {
+        var issuedCertPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
+        var revokedCertPath = Path.Combine(pkiPath, "revoked", $"{commonName}.crt");
+        var certsBySerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{serial}.pem");
+
+        var keyPath = Path.Combine(pkiPath, "private", $"{commonName}.key");
+
+        string? resolvedCertPath = null;
+
+        if (isRevoked)
+        {
+            if (File.Exists(revokedCertPath))
+                resolvedCertPath = revokedCertPath;
+            else if (File.Exists(certsBySerialPath))
+                resolvedCertPath = certsBySerialPath;
+        }
+        else
+        {
+            if (File.Exists(issuedCertPath))
+                resolvedCertPath = issuedCertPath;
+        }
+
+        if (resolvedCertPath == null)
+        {
+            logger.LogWarning("Certificate file not found for CommonName={CommonName}, Serial={Serial}", commonName, serial);
+        }
+
+        if (!File.Exists(keyPath))
+        {
+            logger.LogWarning("Private key file not found for CommonName={CommonName}", commonName);
+        }
+
+        return (resolvedCertPath ?? string.Empty, File.Exists(keyPath) ? keyPath : string.Empty);
     }
 
     private static CertificateStatus ParseStatus(string status)

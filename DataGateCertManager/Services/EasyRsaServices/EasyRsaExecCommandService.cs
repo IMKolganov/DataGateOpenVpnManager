@@ -29,7 +29,7 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
 // # | EASYRSA_CRL_DAYS=7300 ./easyrsa gen-crl           | Generates a CRL valid for 20 years                                |
 // # =========================================================================================================================
     #endregion
-    public async Task<(bool IsSuccess, string Output, int ExitCode, string Error)> ExecuteEasyRsaCommand(
+    public async Task<(bool IsSuccess, string Output, int ExitCode, string Error)> ExecuteEasyRsaCommandAsync(
         string arguments,
         string easyRsaPath,
         CancellationToken cancellationToken,
@@ -44,7 +44,7 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
             var command = $"{commandPrefix} {fullArgs}";
 
             _logger.LogInformation($"Executing command: {command}");
-            var result = await RunCommand(command, cancellationToken);
+            var result = await RunCommandAsync(command, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -69,7 +69,7 @@ public class EasyRsaExecCommandService : IEasyRsaExecCommandService
         }
     }
 
-    public async Task<(string Output, string Error, int ExitCode)> RunCommand(string command,
+    public async Task<(string Output, string Error, int ExitCode)> RunCommandAsync(string command,
         CancellationToken cancellationToken) 
     {
         try

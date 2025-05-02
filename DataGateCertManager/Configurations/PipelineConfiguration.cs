@@ -30,8 +30,12 @@ public static class PipelineConfiguration
         var environmentName = app.Environment.EnvironmentName;
         
         app.MapGet("/",
-            () => Results.Text(statusCode: 200, 
-                content: $"DataGateCertManager Application version: {version}; Environment: {environmentName};"));
+            () => Results.Json(new
+            {
+                version = version,
+                environment = environmentName,
+                application = "DataGateCertManager"
+            }));
 
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
     }

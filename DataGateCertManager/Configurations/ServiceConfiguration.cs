@@ -11,13 +11,16 @@ public static class ServiceConfiguration
     public static void ConfigureServices(this IServiceCollection services)
     {
         // Core services
-        services.AddScoped<ICertVpnService, CertVpnService>();
+        services.AddScoped<IOvpnFileService, OvpnFileService>();
         
         // EasyRsa services
         services.AddScoped<IEasyRsaService, EasyRsaService>();
         services.AddScoped<IEasyRsaParseDbService, EasyRsaParseDbService>();
         services.AddScoped<IEasyRsaExecCommandService, EasyRsaExecCommandService>();
         services.AddScoped<IBashCommandRunner, BashCommandRunner>();
+        
+        // OpenVpn services
+        services.AddScoped<IOpenVpnServerService, OpenVpnServerService>();
         
         services.AddRateLimiter(options =>
         {

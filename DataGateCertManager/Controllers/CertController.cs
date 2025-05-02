@@ -1,18 +1,87 @@
+﻿using DataGateCertManager.Models;
+using DataGateCertManager.Models.Dto;
+using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataGateCertManager.Controllers;
 
 [ApiController]
-[Route("[controller]")]
-public class CertController : ControllerBase
+[Route("api/[controller]")]
+public class CertController(
+    IEasyRsaService easyRsaService,
+    IConfiguration configuration,
+    ILogger<CertController> logger)
+    : ControllerBase
 {
-    public CertController()
+    [HttpGet("GetAllCertificates")]
+    public async Task<ActionResult<List<ServerCertificate>>> GetAllCertificates()
     {
+        try
+        {
+            var mainPath = configuration["EasyRsa:MainPath"] 
+                          ?? throw new InvalidOperationException("EasyRsa:PkiPath configuration is missing");
+
+            var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(
+                mainPath,
+                HttpContext.RequestAborted);
+
+            return Ok(certificates);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error getting all certificates");
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+    
+    [HttpPost("AddServerCertificate")]
+    public async Task<ActionResult<ServerCertificate>> AddServerCertificate(
+        [FromBody] AddServerCertificateRequest request)
+    {
+        try
+        {
+            var mainPath = configuration["EasyRsa:MainPath"] 
+                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+            
+            if (request.CertExpireDays <= 0)
+            {
+                request.CertExpireDays = 365;
+            }
+
+            var result = await easyRsaService.BuildCertificateAsync(
+                mainPath,
+                HttpContext.RequestAborted,
+                request.CommonName,
+                request.CertExpireDays);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error building certificate for {CommonName}", request.CommonName);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
-    [HttpGet(Name = "healthcheck")]
-    public IActionResult Healthcheck()
+    [HttpPost("RevokeCertificate/{commonName}")]
+    public async Task<ActionResult<ServerCertificate>> RevokeCertificate(string commonName)
     {
-        return Ok(200);
+        try
+        {
+            var mainPath = configuration["EasyRsa:MainPath"] 
+                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+
+            var result = await easyRsaService.RevokeCertificateAsync(
+                mainPath,
+                commonName,
+                HttpContext.RequestAborted);
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error revoking certificate for {CommonName}", commonName);
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }

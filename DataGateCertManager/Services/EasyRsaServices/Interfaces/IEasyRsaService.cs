@@ -1,13 +1,13 @@
-﻿using DataGateCertManager.Models;
+﻿using DataGateCertManager.Models.Dto;
 
 namespace DataGateCertManager.Services.EasyRsaServices.Interfaces;
 
 public interface IEasyRsaService
 {
-    Task<CertificateBuildResult> BuildCertificate(string easyRsaPath, CancellationToken cancellationToken,
-        string baseFileName = "client1");
-    Task<string> ReadPemContent(string filePath, CancellationToken cancellationToken);
-    Task<CertificateRevokeResult> RevokeCertificate(string easyRsaPath, string commonName,
+    Task<ServerCertificate> BuildCertificateAsync(string easyRsaPath, CancellationToken cancellationToken,
+        string baseFileName = "client1", int certExpireDays = 365);
+    Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,
         CancellationToken cancellationToken);
-    Task<List<CertificateCaInfo>> GetAllCertificateInfoInIndexFile(string pkiPath, CancellationToken cancellationToken);
+    Task<List<ServerCertificate>> GetAllCertificateInfoInIndexFileAsync(string easyRsaPath,
+        CancellationToken cancellationToken);
 }
