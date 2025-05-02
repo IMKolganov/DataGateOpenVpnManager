@@ -41,8 +41,8 @@ public class OvpnFileController(
         }
     }
 
-    [HttpPost("RevokeOvpnFile/{commonName}")]
-    public async Task<IActionResult> RevokeOvpnFile(string commonName, CancellationToken cancellationToken)
+    [HttpPost("RevokeOvpnFile")]
+    public async Task<IActionResult> RevokeOvpnFile([FromBody] RevokeOvpnFileRequest request, CancellationToken cancellationToken)
     {
         try
         {
@@ -51,14 +51,16 @@ public class OvpnFileController(
 
             var result = await ovpnFileService.RevokeOvpnFile(
                 mainPath,
-                commonName,
+                request.CommonName,
+                request.OvpnFileName,
+                request.OvpnFilePath,
                 cancellationToken);
 
             return Ok(result);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error revoke ovpn file for {CommonName}", commonName);
+            logger.LogError(ex, "Error revoke ovpn file for {CommonName}", request.CommonName);
             return BadRequest(new { error = ex.Message });
         }
     }
