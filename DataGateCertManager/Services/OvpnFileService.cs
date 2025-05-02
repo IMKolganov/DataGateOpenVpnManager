@@ -85,7 +85,14 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         logger.LogInformation("Updated database for revoked certificate: {CommonName}, " +
                                "External ID: {ExternalId}", commonName, 0);
 
-        return new IssuedOvpnFile();
+        return new IssuedOvpnFile()
+        {
+            CommonName = commonName,
+            FileName = ovpnFileName,
+            FilePath = revokedFilePath,
+            CertFilePath = serverCertificate.CertificatePath,
+            KeyFilePath = serverCertificate.KeyPath,
+        };
     }
 
     public async Task<OvpnFile> GetOvpnFile(string fileName, string filePath, CancellationToken cancellationToken)
