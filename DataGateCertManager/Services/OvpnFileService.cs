@@ -79,7 +79,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         
         logger.LogInformation("RevokeCertificate result: {Message} " +
                                "for CertName: {CommonName}", serverCertificate.Message, commonName);
-        string revokedFilePath = MoveRevokedOvpnFile(ovpnFileName, ovpnFilePath);
+        string revokedFilePath = MoveRevokedOvpnFile(ovpnFileName, ovpnFilePath, easyRsaPath);
         logger.LogInformation("Successfully moved revoked .ovpn file to: {RevokedFilePath}", revokedFilePath);
 
         logger.LogInformation("Updated database for revoked certificate: {CommonName}, " +
@@ -117,10 +117,10 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         }
     }
     
-    private string MoveRevokedOvpnFile(string ovpnFileName, string ovpnFilePath)
+    private string MoveRevokedOvpnFile(string ovpnFileName, string ovpnFilePath, string easyRsaPath)
     {
-        var revokedOvpnFilesDirPath = "revoked";
-        
+        var revokedOvpnFilesDirPath = Path.Combine(easyRsaPath, "revoked");
+    
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         var uniqueFileName = 
             $"{Path.GetFileNameWithoutExtension(ovpnFileName)}" +
