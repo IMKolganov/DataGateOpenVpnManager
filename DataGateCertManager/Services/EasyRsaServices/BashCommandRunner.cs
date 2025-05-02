@@ -7,7 +7,7 @@ public class BashCommandRunner : IBashCommandRunner
 {
     public async Task<(string Output, string Error, int ExitCode)> RunCommandAsync(
         string command,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 

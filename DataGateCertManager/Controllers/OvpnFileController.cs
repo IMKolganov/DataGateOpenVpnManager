@@ -15,7 +15,7 @@ public class OvpnFileController(
 {
     [HttpPost("AddOvpnFile")]
     public async Task<ActionResult<IssuedOvpnFile>> AddOvpnFile([FromBody] AddOvpnFileRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -28,7 +28,7 @@ public class OvpnFileController(
                 request.ConfigTemplate,
                 request.ServerIp,
                 request.ServerPort,
-                HttpContext.RequestAborted,
+                cancellationToken,
                 request.IssuedTo,
                 request.OvpnFileExpireDays);
 
@@ -42,7 +42,7 @@ public class OvpnFileController(
     }
 
     [HttpPost("RevokeOvpnFile/{commonName}")]
-    public async Task<IActionResult> RevokeOvpnFile(string commonName)
+    public async Task<IActionResult> RevokeOvpnFile(string commonName, CancellationToken cancellationToken)
     {
         try
         {
@@ -52,7 +52,7 @@ public class OvpnFileController(
             var result = await ovpnFileService.RevokeOvpnFile(
                 mainPath,
                 commonName,
-                HttpContext.RequestAborted);
+                cancellationToken);
 
             return Ok(result);
         }
@@ -73,7 +73,7 @@ public class OvpnFileController(
             var result = await ovpnFileService.GetOvpnFile(
                 request.FileName,
                 request.FilePath,
-                HttpContext.RequestAborted);
+                cancellationToken);
 
             return Ok(result);
         }

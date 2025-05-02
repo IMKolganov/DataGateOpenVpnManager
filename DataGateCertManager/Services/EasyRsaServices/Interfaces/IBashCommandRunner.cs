@@ -4,5 +4,5 @@ public interface IBashCommandRunner
 {
     Task<(string Output, string Error, int ExitCode)> RunCommandAsync(
         string command, 
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken);
 }
