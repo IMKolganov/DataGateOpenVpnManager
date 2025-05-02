@@ -8,12 +8,12 @@ namespace DataGateCertManager.Services;
 public class OpenVpnServerService(ILogger<OpenVpnServerService> logger, 
     IEasyRsaExecCommandService easyRsaExecCommandService) : IOpenVpnServerService
 {
-    public async Task<string> BuildTlsAuthKeyAsync(string easyRsaPath, CancellationToken cancellationToken)
+    public async Task<string> BuildTlsAuthKeyAsync(string easyRsaPath, string taKeyName,
+        CancellationToken cancellationToken)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
         var unixStylePath = ConvertToBashPath(easyRsaPath);
 
-        var taKeyName = "ta.key";
         var taKeyPath = Path.Combine(easyRsaPath, "pki", taKeyName);
         var taKeyDirUnix = $"{unixStylePath}/pki";
         var taKeyFullPathUnix = $"{taKeyDirUnix}/{taKeyName}";

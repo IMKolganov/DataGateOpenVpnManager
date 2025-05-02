@@ -166,15 +166,16 @@ public class EasyRsaService(
         var fullEasyRsaPath = Path.GetFullPath(easyRsaPath);
         var fullEasyRsaPkiPath = Path.Combine(fullEasyRsaPath, "pki");
         
-        if (!Directory.Exists(fullEasyRsaPkiPath))
+        var taKeyName = "ta.key";//todo: need move
+        if (!Directory.Exists(fullEasyRsaPkiPath) || !File.Exists(Path.Combine(easyRsaPath, "pki", taKeyName)))
         {
-            await InstallEasyRsaAsync(fullEasyRsaPath, cancellationToken);
+            await InstallEasyRsaAsync(fullEasyRsaPath, taKeyName, cancellationToken);
         }
         
         return await easyRsaParseDbService.ParseCertificateInfoInIndexFileAsync(fullEasyRsaPkiPath, cancellationToken);
     }
 
-    private async Task InstallEasyRsaAsync(string easyRsaPath, CancellationToken cancellationToken)
+    private async Task InstallEasyRsaAsync(string easyRsaPath, string taKeyName, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Initializing EasyRSA...");
 
@@ -236,7 +237,7 @@ public class EasyRsaService(
 
         if (!File.Exists(taPath))
         {
-            await openVpnServerService.BuildTlsAuthKeyAsync(easyRsaPath, cancellationToken);
+            await openVpnServerService.BuildTlsAuthKeyAsync(easyRsaPath, taKeyName, cancellationToken);
         }
     }
 

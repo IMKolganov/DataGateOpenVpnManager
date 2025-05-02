@@ -2,5 +2,6 @@
 
 public interface IOpenVpnServerService
 {
-    Task<string> BuildTlsAuthKeyAsync(string easyRsaPath, CancellationToken cancellationToken);
+    Task<string> BuildTlsAuthKeyAsync(string easyRsaPath, string taKeyName,
+        CancellationToken cancellationToken);
 }

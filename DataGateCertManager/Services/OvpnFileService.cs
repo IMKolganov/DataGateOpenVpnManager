@@ -71,7 +71,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
     }
 
     public async Task<IssuedOvpnFile?> RevokeOvpnFile(string easyRsaPath, string commonName, 
-        CancellationToken cancellationToken)
+        string ovpnFileName, string ovpnFilePath, CancellationToken cancellationToken)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
         var serverCertificate = await easyRsaService.RevokeCertificateAsync(
@@ -79,8 +79,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         
         logger.LogInformation("RevokeCertificate result: {Message} " +
                                "for CertName: {CommonName}", serverCertificate.Message, commonName);
-        string revokedFilePath = MoveRevokedOvpnFile(0, "ovpnFileDir", "revokedOvpnFilesDirPath",
-            new IssuedOvpnFile());
+        string revokedFilePath = MoveRevokedOvpnFile(ovpnFileName, ovpnFilePath);
         logger.LogInformation("Successfully moved revoked .ovpn file to: {RevokedFilePath}", revokedFilePath);
 
         logger.LogInformation("Updated database for revoked certificate: {CommonName}, " +
@@ -111,21 +110,18 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         }
     }
     
-    private string MoveRevokedOvpnFile(int fileId, string ovpnFileDir, string revokedOvpnFilesDirPath, 
-        IssuedOvpnFile issuedOvpnFile)
+    private string MoveRevokedOvpnFile(string ovpnFileName, string ovpnFilePath)
     {
-        string ovpnFilePath = Path.Combine(ovpnFileDir, issuedOvpnFile.FileName);
-
+        var revokedOvpnFilesDirPath = "revoked";
+        
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         var uniqueFileName = 
-            $"{Path.GetFileNameWithoutExtension(issuedOvpnFile.FileName)}" +
-            $"_{fileId}" +
+            $"{Path.GetFileNameWithoutExtension(ovpnFileName)}" +
             $"_{timestamp}" +
-            $"{Path.GetExtension(issuedOvpnFile.FileName)}";
+            $"{Path.GetExtension(ovpnFileName)}";
 
-        string revokedFilePath = Path.Combine(revokedOvpnFilesDirPath, uniqueFileName);
+        var revokedFilePath = Path.Combine(revokedOvpnFilesDirPath, uniqueFileName);
 
-        Directory.CreateDirectory(ovpnFileDir);
         Directory.CreateDirectory(revokedOvpnFilesDirPath);
 
         if (File.Exists(ovpnFilePath))
