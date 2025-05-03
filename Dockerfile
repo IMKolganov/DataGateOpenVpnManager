@@ -51,10 +51,9 @@ ENV EASYRSA=/usr/share/easy-rsa \
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 
-# Ensure LF endings and execution permissions
-RUN sed -i 's/\r$//' /entrypoint.sh && \
-    chmod +x /entrypoint.sh && \
-    file /entrypoint.sh && \
-    head -1 /entrypoint.sh | cat -A
+# 🔧 Convert CRLF to LF just in case
+RUN sed -i 's/\r$//' /entrypoint.sh
+
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
