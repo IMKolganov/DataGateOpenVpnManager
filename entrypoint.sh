@@ -157,6 +157,26 @@ ls -l "$DATA_DIR"
 echo "===== server.conf contents ====="
 cat "$DATA_DIR/server.conf" || echo "server.conf not found!"
 
-echo "===== Starting OpenVPN..."
-tail -F "$DATA_DIR/openvpn.log" "$DATA_DIR/openvpn-status.log" &
-exec openvpn --config "$DATA_DIR/server.conf"
+echo "===== Starting OpenVPN in background..."
+openvpn --config "$DATA_DIR/server.conf" &
+OPENVPN_PID=$!
+
+echo "[entrypoint] Starting .NET application..."
+dotnet DataGateCertManager.dll &
+DOTNET_PID=$!
+
+wait $OPENVPN_PID
+OPENVPN_EXIT_CODE=$?
+
+wait $DOTNET_PID
+DOTNET_EXIT_CODE=$?
+
+if [ $OPENVPN_EXIT_CODE -ne 0 ]; then
+  echo "OpenVPN exited with code $OPENVPN_EXIT_CODE"
+  exit $OPENVPN_EXIT_CODE
+fi
+
+if [ $DOTNET_EXIT_CODE -ne 0 ]; then
+  echo ".NET app exited with code $DOTNET_EXIT_CODE"
+  exit $DOTNET_EXIT_CODE
+fi
