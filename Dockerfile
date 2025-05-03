@@ -1,6 +1,3 @@
-# Use lightweight Alpine as base image
-FROM alpine:latest
-
 # Define the TARGETARCH argument
 ARG TARGETARCH
 
@@ -44,23 +41,6 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 LABEL maintainer="Ivan Kolganov with ❤️ via Kyle Manna's template"
-
-# Add edge testing repo for pamtester and others
-RUN echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing/" >> /etc/apk/repositories && \
-    apk add --no-cache \
-    bash \
-    curl \
-    ca-certificates \
-    openvpn \
-    iptables \
-    easy-rsa \
-    openvpn-auth-pam \
-    google-authenticator \
-    pamtester \
-    file \
-    libqrencode && \
-    ln -s /usr/share/easy-rsa/easyrsa /usr/local/bin && \
-    rm -rf /tmp/* /var/tmp/* /var/cache/apk/* /var/cache/distfiles/*
 
 # Environment for easy-rsa and OpenVPN
 ENV OPENVPN=/etc/openvpn
