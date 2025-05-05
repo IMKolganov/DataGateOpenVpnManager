@@ -35,6 +35,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 # Use root initially to allow setting permissions
 USER root
 
+# Install required packages
+RUN apt-get update && \
+    apt-get install -y \
+    iptables \
+    easy-rsa \
+    openvpn \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy published app
