@@ -1,13 +1,13 @@
-﻿using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+﻿using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using DataGateCertManager.Services.Interfaces;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Responses;
 
 namespace DataGateCertManager.Services;
 
 public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService easyRsaService)
     : IOvpnFileService
 {
-    public async Task<IssuedOvpnFile> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
+    public async Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
         string serverIp, int serverPort, CancellationToken cancellationToken, 
         string issuedTo = "openVpnClient", int certExpireDays = 365)
     {
@@ -56,7 +56,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             throw new FileNotFoundException("OVPN file was not created as expected.", fileInfo.FullName);
         }
 
-        var issuedOvpnFile = new IssuedOvpnFile
+        var issuedOvpnFile = new OvpnFileMetadata
         {
             CommonName = commonName,
             FileName = fileInfo.Name,
@@ -70,7 +70,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         return issuedOvpnFile;
     }
 
-    public async Task<IssuedOvpnFile?> RevokeOvpnFile(string easyRsaPath, string commonName, 
+    public async Task<OvpnFileMetadata?> RevokeOvpnFile(string easyRsaPath, string commonName, 
         string ovpnFileName, string ovpnFilePath, CancellationToken cancellationToken)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
@@ -85,7 +85,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         logger.LogInformation("Updated database for revoked certificate: {CommonName}, " +
                                "External ID: {ExternalId}", commonName, 0);
 
-        return new IssuedOvpnFile()
+        return new OvpnFileMetadata()
         {
             CommonName = commonName,
             FileName = ovpnFileName,
@@ -95,7 +95,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         };
     }
 
-    public async Task<OvpnFile> GetOvpnFile(string fileName, string filePath, CancellationToken cancellationToken)
+    public async Task<OvpnFileDownload> GetOvpnFile(string fileName, string filePath, CancellationToken cancellationToken)
     {
         if (!File.Exists(filePath))
         {
@@ -105,7 +105,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         try
         {
             var content = await File.ReadAllBytesAsync(filePath, cancellationToken);
-            return new OvpnFile
+            return new OvpnFileDownload
             {
                 FileName = fileName,
                 Content = content

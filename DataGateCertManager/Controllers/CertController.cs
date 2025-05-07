@@ -1,7 +1,7 @@
-﻿using DataGateCertManager.Models;
-using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+﻿using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Requests;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Responses;
 
 namespace DataGateCertManager.Controllers;
 
@@ -63,8 +63,9 @@ public class CertController(
         }
     }
 
-    [HttpPost("RevokeCertificate/{commonName}")]
-    public async Task<ActionResult<ServerCertificate>> RevokeCertificate(string commonName)
+    [HttpPost("RevokeCertificate")]
+    public async Task<ActionResult<ServerCertificate>> RevokeCertificate([FromBody] 
+        RevokeServerCertificateRequest request)
     {
         try
         {
@@ -73,14 +74,14 @@ public class CertController(
 
             var result = await easyRsaService.RevokeCertificateAsync(
                 mainPath,
-                commonName,
+                request.CommonName,
                 HttpContext.RequestAborted);
 
             return Ok(result);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error revoking certificate for {CommonName}", commonName);
+            logger.LogError(ex, "Error revoking certificate for {CommonName}", request.CommonName);
             return BadRequest(new { error = ex.Message });
         }
     }

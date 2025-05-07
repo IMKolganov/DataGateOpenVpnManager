@@ -1,16 +1,15 @@
-﻿using DataGateCertManager.Models;
-using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Models.Enums;
+﻿
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Responses;
 
 namespace DataGateCertManager.Services.Interfaces;
 
 public interface IOvpnFileService
 {
-    Task<IssuedOvpnFile> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
+    Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
         string serverIp, int serverPort, CancellationToken cancellationToken, 
         string issuedTo = "openVpnClient", int certExpireDays = 365);
 
-    Task<IssuedOvpnFile?> RevokeOvpnFile(string easyRsaPath, string commonName,
+    Task<OvpnFileMetadata?> RevokeOvpnFile(string easyRsaPath, string commonName,
         string ovpnFileName, string ovpnFilePath, CancellationToken cancellationToken);
-    Task<OvpnFile> GetOvpnFile(string fileName, string filePath, CancellationToken cancellationToken);
+    Task<OvpnFileDownload> GetOvpnFile(string fileName, string filePath, CancellationToken cancellationToken);
 }

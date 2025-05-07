@@ -1,8 +1,8 @@
-﻿using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+﻿using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using DataGateCertManager.Services.Interfaces;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Responses;
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 

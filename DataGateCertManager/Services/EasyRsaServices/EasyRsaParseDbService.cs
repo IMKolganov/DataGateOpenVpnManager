@@ -1,7 +1,7 @@
 ﻿using System.Globalization;
-using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Models.Enums;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Responses;
+using OpenVPNGateMonitor.SharedModels.Enums;
 
 namespace DataGateCertManager.Services.EasyRsaServices;
 

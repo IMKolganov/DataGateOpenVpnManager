@@ -1,4 +1,4 @@
-﻿using DataGateCertManager.Models.Dto;
+﻿using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Responses;
 
 namespace DataGateCertManager.Services.EasyRsaServices.Interfaces;
 

@@ -1,7 +1,7 @@
-﻿using DataGateCertManager.Models;
-using DataGateCertManager.Models.Dto;
-using DataGateCertManager.Services.Interfaces;
+﻿using DataGateCertManager.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Requests;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Responses;
 
 namespace DataGateCertManager.Controllers;
 
@@ -14,7 +14,7 @@ public class OvpnFileController(
     : ControllerBase
 {
     [HttpPost("AddOvpnFile")]
-    public async Task<ActionResult<IssuedOvpnFile>> AddOvpnFile([FromBody] AddOvpnFileRequest request,
+    public async Task<ActionResult<OvpnFileMetadata>> AddOvpnFile([FromBody] AddOvpnFileRequest request,
         CancellationToken cancellationToken)
     {
         try
@@ -42,7 +42,8 @@ public class OvpnFileController(
     }
 
     [HttpPost("RevokeOvpnFile")]
-    public async Task<IActionResult> RevokeOvpnFile([FromBody] RevokeOvpnFileRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<OvpnFileMetadata>> RevokeOvpnFile([FromBody] RevokeOvpnFileRequest request, 
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -66,8 +67,7 @@ public class OvpnFileController(
     }
 
     [HttpPost("DownloadOvpnFile")]
-    public async Task<IActionResult> DownloadOvpnFile(
-        [FromBody] DownloadOvpnFileRequest request,
+    public async Task<ActionResult<OvpnFileDownload>> DownloadOvpnFile([FromBody] DownloadOvpnFileRequest request,
         CancellationToken cancellationToken)
     {
         try
