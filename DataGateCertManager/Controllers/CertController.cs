@@ -1,4 +1,5 @@
-﻿using DataGateCertManager.Services.EasyRsaServices.Interfaces;
+﻿using DataGateCertManager.Helpers;
+using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Requests;
 using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Responses;
@@ -9,7 +10,7 @@ namespace DataGateCertManager.Controllers;
 [Route("api/[controller]")]
 public class CertController(
     IEasyRsaService easyRsaService,
-    IConfiguration configuration,
+    IEasyRsaPathResolver easyRsaPathResolver,
     ILogger<CertController> logger)
     : ControllerBase
 {
@@ -18,8 +19,7 @@ public class CertController(
     {
         try
         {
-            var mainPath = configuration["EasyRsa:MainPath"] 
-                          ?? throw new InvalidOperationException("EasyRsa:PkiPath configuration is missing");
+            var mainPath = easyRsaPathResolver.GetEasyRsaPath();
 
             var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(
                 mainPath,
@@ -40,8 +40,7 @@ public class CertController(
     {
         try
         {
-            var mainPath = configuration["EasyRsa:MainPath"] 
-                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+            var mainPath = easyRsaPathResolver.GetEasyRsaPath();
             
             if (request.CertExpireDays <= 0)
             {
@@ -69,8 +68,7 @@ public class CertController(
     {
         try
         {
-            var mainPath = configuration["EasyRsa:MainPath"] 
-                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+            var mainPath = easyRsaPathResolver.GetEasyRsaPath();
 
             var result = await easyRsaService.RevokeCertificateAsync(
                 mainPath,

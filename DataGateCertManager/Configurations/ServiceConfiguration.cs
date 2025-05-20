@@ -1,4 +1,5 @@
 ﻿using System.Threading.RateLimiting;
+using DataGateCertManager.Helpers;
 using DataGateCertManager.Services;
 using DataGateCertManager.Services.EasyRsaServices;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
@@ -35,6 +36,7 @@ public static class ServiceConfiguration
                     }));
         });
 
+        services.AddSingleton<IEasyRsaPathResolver, EasyRsaPathResolver>();
         
         services.AddControllers();
 

@@ -21,17 +21,14 @@ public static class SerilogConfiguration
 
         var elasticsearchSettings = new ElasticsearchSettings
         {
-            Uri = (Environment.GetEnvironmentVariable("ELASTIC_URI") 
-                   ?? elasticConfig["Elasticsearch:Uri"]) ?? string.Empty,
-
-            Username = (Environment.GetEnvironmentVariable("ELASTIC_USERNAME") 
-                        ?? elasticConfig["Elasticsearch:Username"]) ?? string.Empty,
-
-            Password = (Environment.GetEnvironmentVariable("ELASTIC_PASSWORD") 
-                        ?? elasticConfig["Elasticsearch:Password"]) ?? string.Empty,
-
-            IndexFormat = (Environment.GetEnvironmentVariable("ELASTIC_INDEX_FORMAT") 
-                           ?? elasticConfig["Elasticsearch:IndexFormat"]) ?? string.Empty
+            Uri = Environment.GetEnvironmentVariable("ELASTIC_URI") 
+                  ?? elasticConfig["Elasticsearch:Uri"] ?? string.Empty,
+            Username = Environment.GetEnvironmentVariable("ELASTIC_USERNAME") 
+                       ?? elasticConfig["Elasticsearch:Username"] ?? string.Empty,
+            Password = Environment.GetEnvironmentVariable("ELASTIC_PASSWORD") 
+                       ?? elasticConfig["Elasticsearch:Password"] ?? string.Empty,
+            IndexFormat = Environment.GetEnvironmentVariable("ELASTIC_INDEX_FORMAT") 
+                          ?? elasticConfig["Elasticsearch:IndexFormat"] ?? string.Empty
         };
 
         if (!string.IsNullOrWhiteSpace(elasticsearchSettings.Uri))
@@ -44,7 +41,7 @@ public static class SerilogConfiguration
                 NumberOfShards = 1,
                 NumberOfReplicas = 0,
                 ModifyConnectionSettings = conn => conn
-                    .ServerCertificateValidationCallback((sender, cert, chain, errors) => true)
+                    .ServerCertificateValidationCallback((_, _, _, _) => true)
                     .BasicAuthentication(elasticsearchSettings.Username, elasticsearchSettings.Password),
                 FailureCallback = (logEvent, exception) =>
                 {
@@ -57,7 +54,6 @@ public static class SerilogConfiguration
         }
 
         Log.Logger = loggerConfig.CreateLogger();
-
         var serilogLogger = Log.ForContext(typeof(SerilogConfiguration));
 
         if (!string.IsNullOrWhiteSpace(elasticsearchSettings.Uri))
@@ -65,6 +61,28 @@ public static class SerilogConfiguration
             serilogLogger.Information($"📡 Elasticsearch logging is enabled. " +
                                       $"Host: {elasticsearchSettings.Uri}, " +
                                       $"IndexFormat: {elasticsearchSettings.IndexFormat}");
+
+            try
+            {
+                using var client = new HttpClient();
+                var byteArray = System.Text.Encoding.ASCII.GetBytes($"{elasticsearchSettings.Username}:{elasticsearchSettings.Password}");
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+
+                var response = client.GetAsync(elasticsearchSettings.Uri).Result;
+
+                if (response.IsSuccessStatusCode)
+                {
+                    serilogLogger.Information("✅ Successfully connected to Elasticsearch.");
+                }
+                else
+                {
+                    serilogLogger.Warning($"⚠️ Failed to connect to Elasticsearch. Status code: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                serilogLogger.Error(ex, "❌ Exception occurred while testing connection to Elasticsearch.");
+            }
         }
         else
         {

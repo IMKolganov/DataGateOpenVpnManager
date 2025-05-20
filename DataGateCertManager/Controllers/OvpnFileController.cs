@@ -1,4 +1,5 @@
-﻿using DataGateCertManager.Services.Interfaces;
+﻿using DataGateCertManager.Helpers;
+using DataGateCertManager.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Requests;
 using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Responses;
@@ -9,7 +10,7 @@ namespace DataGateCertManager.Controllers;
 [Route("api/[controller]")]
 public class OvpnFileController(
     IOvpnFileService ovpnFileService,
-    IConfiguration configuration,
+    IEasyRsaPathResolver easyRsaPathResolver,
     ILogger<OvpnFileController> logger)
     : ControllerBase
 {
@@ -19,8 +20,7 @@ public class OvpnFileController(
     {
         try
         {
-            var mainPath = configuration["EasyRsa:MainPath"] 
-                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+            var mainPath = easyRsaPathResolver.GetEasyRsaPath();
 
             var result = await ovpnFileService.AddOvpnFile(
                 mainPath,
@@ -47,8 +47,7 @@ public class OvpnFileController(
     {
         try
         {
-            var mainPath = configuration["EasyRsa:MainPath"] 
-                           ?? throw new InvalidOperationException("EasyRsa:MainPath configuration is missing");
+            var mainPath = easyRsaPathResolver.GetEasyRsaPath();
 
             var result = await ovpnFileService.RevokeOvpnFile(
                 mainPath,
