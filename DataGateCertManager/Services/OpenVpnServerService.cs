@@ -6,29 +6,29 @@ using DataGateCertManager.Services.Interfaces;
 namespace DataGateCertManager.Services;
 
 public class OpenVpnServerService(ILogger<OpenVpnServerService> logger, 
-    IEasyRsaExecCommandService easyRsaExecCommandService) : IOpenVpnServerService
+    IBashCommandRunner easyRsaExecCommandService) : IOpenVpnServerService
 {
     public async Task<string> BuildTlsAuthKeyAsync(string easyRsaPath, string taKeyName,
         CancellationToken cancellationToken)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
+        var pkiDir = Path.Combine(easyRsaPath, "pki");
+        var taKeyPath = Path.Combine(pkiDir, taKeyName);
 
-        var taKeyPath = Path.Combine(easyRsaPath, "pki", taKeyName);
-        var taKeyDirUnix = $"{unixStylePath}/pki";
-        var taKeyFullPathUnix = $"{taKeyDirUnix}/{taKeyName}";
-
-        if (!Directory.Exists(Path.Combine(easyRsaPath, "pki")))
+        if (!Directory.Exists(pkiDir))
         {
-            Directory.CreateDirectory(Path.Combine(easyRsaPath, "pki"));
+            Directory.CreateDirectory(pkiDir);
         }
 
         logger.LogInformation("Generating TLS-auth key: {Path}", taKeyPath);
 
-        var command = $"cd \"{taKeyDirUnix}\" && openvpn --genkey --secret \"{taKeyFullPathUnix}\"";
+        var command = $"openvpn --genkey --secret \"{taKeyName}\"";
 
-        var (output, error, exitCode) = 
-            await easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
+        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+            command,
+            environmentVariables: new Dictionary<string, string>(),
+            cancellationToken: cancellationToken,
+            workingDirectory: pkiDir);
 
         if (exitCode != 0)
         {

@@ -7,8 +7,10 @@ using OpenVPNGateMonitor.SharedModels.DataGateCertManager.Cert.Responses;
 namespace DataGateCertManager.Services.EasyRsaServices;
 
 public class EasyRsaService(
-    ILogger<IEasyRsaService> logger, IEasyRsaParseDbService easyRsaParseDbService, 
-    IEasyRsaExecCommandService easyRsaExecCommandService, IOpenVpnServerService openVpnServerService)
+    ILogger<IEasyRsaService> logger,
+    IEasyRsaParseDbService easyRsaParseDbService,
+    IBashCommandRunner easyRsaExecCommandService,
+    IOpenVpnServerService openVpnServerService)
     : IEasyRsaService
 {
     private readonly ILogger<IEasyRsaService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -40,35 +42,42 @@ public class EasyRsaService(
 
     #endregion
 
-    public async Task<ServerCertificate> BuildCertificateAsync(string easyRsaPath, CancellationToken cancellationToken,
-        string commonName = "client1", int certExpireDays = 365)
+    public async Task<ServerCertificate> BuildCertificateAsync(
+        string easyRsaPath,
+        CancellationToken cancellationToken,
+        string commonName = "client1",
+        int certExpireDays = 365)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
-
         var pkiPath = Path.Combine(easyRsaPath, "pki");
         var reqPath = Path.Combine(pkiPath, "reqs", $"{commonName}.req");
 
         _logger.LogInformation("Starting certificate build for: {CommonName}", commonName);
 
         string command;
-        
-        var env = $"EASYRSA_BATCH=1 EASYRSA_CERT_EXPIRE={certExpireDays}";
 
         if (File.Exists(reqPath))
         {
             _logger.LogWarning(
                 "Request file already exists: {ReqPath}. Using existing request to sign new certificate.", reqPath);
-            command = $"cd \"{unixStylePath}\" && {env} ./easyrsa sign client {commonName}";
+            command = $"./easyrsa sign client {commonName}";
         }
         else
         {
-            command = $"cd \"{unixStylePath}\" && {env} ./easyrsa build-client-full {commonName} nopass";
+            command = $"./easyrsa build-client-full {commonName} nopass";
         }
-        
+
+        var environmentVariables = new Dictionary<string, string>
+        {
+            ["EASYRSA_BATCH"] = "1",
+            ["EASYRSA_CERT_EXPIRE"] = certExpireDays.ToString(),
+            ["EASYRSA_PKI"] = pkiPath
+        };
+
         _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
-        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(command, cancellationToken);
+        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+            command, environmentVariables, cancellationToken);
 
         if (exitCode != 0)
         {
@@ -83,10 +92,10 @@ public class EasyRsaService(
         {
             _logger.LogInformation("CRL updated successfully.");
         }
+
         var certPath = ExtractCertificatePathFromOutput(output);
         var serialFromOpenSsl = await CheckCertInOpensslAsync(certPath, cancellationToken);
         var serverCertificate = await MatchingCertsAsync(easyRsaPath, serialFromOpenSsl, commonName, cancellationToken);
-        
 
         if (!serverCertificate.SerialNumber.Contains(serialFromOpenSsl))
         {
@@ -101,13 +110,15 @@ public class EasyRsaService(
         return serverCertificate;
     }
 
-    public async Task<ServerCertificate> RevokeCertificateAsync(string easyRsaPath, string commonName,
+    public async Task<ServerCertificate> RevokeCertificateAsync(
+        string easyRsaPath,
+        string commonName,
         CancellationToken cancellationToken)
     {
         var serverCertificate = new ServerCertificate();
         var serialNumber = string.Empty;
+
         easyRsaPath = Path.GetFullPath(easyRsaPath);
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
         var pkiPath = Path.Combine(easyRsaPath, "pki");
         var issuedPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
 
@@ -119,10 +130,16 @@ public class EasyRsaService(
 
         _logger.LogInformation("Revoking certificate for: {CommonName}", commonName);
 
-        var revokeCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa revoke {commonName}";
+        var command = $"./easyrsa revoke {commonName}";
+        var environmentVariables = new Dictionary<string, string>
+        {
+            ["EASYRSA_BATCH"] = "1",
+            ["EASYRSA_PKI"] = pkiPath
+        };
+
         var (output, error, exitCode) =
-            await easyRsaExecCommandService.RunCommandAsync(revokeCommand, cancellationToken);
-        
+            await easyRsaExecCommandService.RunCommandAsync(command, environmentVariables, cancellationToken);
+
         if (exitCode == 0)
         {
             serialNumber = ExtractSerialFromRevocationOutput(error) ?? string.Empty;
@@ -179,7 +196,8 @@ public class EasyRsaService(
     {
         _logger.LogInformation("Initializing EasyRSA...");
 
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
+        easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var pkiPath = Path.Combine(easyRsaPath, "pki");
         var scriptPath = Path.Combine(easyRsaPath, "easyrsa");
 
         if (!File.Exists(scriptPath))
@@ -187,25 +205,33 @@ public class EasyRsaService(
 
         try
         {
-            var chmodCommand = $"chmod +x \"{unixStylePath}/easyrsa\"";
-            await easyRsaExecCommandService.RunCommandAsync(chmodCommand, cancellationToken);
+            var chmodCommand = $"chmod +x ./easyrsa";
+            await easyRsaExecCommandService.RunCommandAsync(
+                chmodCommand,
+                new Dictionary<string, string>(),cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogWarning($"chmod failed: {ex.Message}");
         }
 
-        var caPath = Path.Combine(easyRsaPath, "pki", "ca.crt");
-        var taPath = Path.Combine(easyRsaPath, "pki", "ta.crt");
-        var isPkiDirExists = Directory.Exists(Path.Combine(easyRsaPath, "pki"));
+        var caPath = Path.Combine(pkiPath, "ca.crt");
+        var taPath = Path.Combine(pkiPath, "ta.crt");
 
-        if (!isPkiDirExists)
+        var env = new Dictionary<string, string>
         {
-            var initCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa init-pki";
+            ["EASYRSA_BATCH"] = "1",
+            ["EASYRSA_PKI"] = pkiPath
+        };
+
+        if (!Directory.Exists(pkiPath))
+        {
+            var initCommand = $"./easyrsa init-pki";
             _logger.LogInformation("Running EasyRSA init-pki...");
 
-            var (initOut, initErr, initExit) =
-                await easyRsaExecCommandService.RunCommandAsync(initCommand, cancellationToken);
+            var (initOut, initErr, initExit) = await easyRsaExecCommandService.RunCommandAsync(
+                initCommand, env, cancellationToken);
+
             if (initExit != 0)
             {
                 _logger.LogError("init-pki failed. Output: {Output}, Error: {Error}", initOut, initErr);
@@ -217,11 +243,12 @@ public class EasyRsaService(
 
         if (!File.Exists(caPath))
         {
-            var buildCaCommand = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa build-ca nopass";
+            var buildCaCommand = $"./easyrsa build-ca nopass";
             _logger.LogInformation("No CA certificate found. Running build-ca...");
 
-            var (caOut, caErr, caExit) =
-                await easyRsaExecCommandService.RunCommandAsync(buildCaCommand, cancellationToken);
+            var (caOut, caErr, caExit) = await easyRsaExecCommandService.RunCommandAsync(
+                buildCaCommand, env, cancellationToken);
+
             if (caExit != 0)
             {
                 _logger.LogError("build-ca failed. Output: {Output}, Error: {Error}", caOut, caErr);
@@ -249,8 +276,10 @@ public class EasyRsaService(
         var opensslPath = ConvertToBashPath(certPath);
         var certPathCommand = $"openssl x509 -in \"{opensslPath}\" -serial -noout";
 
+        var environmentVariables = new Dictionary<string, string>();
+
         var (certOutput, certError, certExitCode) =
-            await easyRsaExecCommandService.RunCommandAsync(certPathCommand, cancellationToken);
+            await easyRsaExecCommandService.RunCommandAsync(certPathCommand, environmentVariables,  cancellationToken);
 
         if (certExitCode != 0)
         {
@@ -258,21 +287,31 @@ public class EasyRsaService(
         }
 
         var serial = certOutput.Split('=')[1].Trim();
-        _logger.LogInformation("Certificate serial retrieved:\n{Serial}\nFull OpenSSL response:\n{Output}", 
+        _logger.LogInformation("Certificate serial retrieved:\n{Serial}\nFull OpenSSL response:\n{Output}",
             serial, certOutput);
+
         return serial;
     }
 
     private async Task<bool> UpdateCrlAsync(string easyRsaPath, CancellationToken cancellationToken)
     {
         easyRsaPath = Path.GetFullPath(easyRsaPath);
-        var unixStylePath = ConvertToBashPath(easyRsaPath);
-        var crlPath = Path.Combine(easyRsaPath, "pki", "crl.pem");
+        var pkiPath = Path.Combine(easyRsaPath, "pki");
+        var crlPath = Path.Combine(pkiPath, "crl.pem");
 
-        var command = $"cd \"{unixStylePath}\" && EASYRSA_BATCH=1 ./easyrsa gen-crl";
+        var command = $"./easyrsa gen-crl";
+
+        var environmentVariables = new Dictionary<string, string>
+        {
+            ["EASYRSA_BATCH"] = "1",
+            ["EASYRSA_PKI"] = pkiPath
+        };
+
         _logger.LogInformation("Executing EasyRSA CRL generation command: {Command}", command);
 
-        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(command, 
+        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+            command,
+            environmentVariables,
             cancellationToken);
 
         if (exitCode != 0)

@@ -7,7 +7,9 @@ public class BashCommandRunner : IBashCommandRunner
 {
     public async Task<(string Output, string Error, int ExitCode)> RunCommandAsync(
         string command,
-        CancellationToken cancellationToken)
+        Dictionary<string, string>? environmentVariables,
+        CancellationToken cancellationToken,
+        string? workingDirectory = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -16,8 +18,17 @@ public class BashCommandRunner : IBashCommandRunner
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
-            CreateNoWindow = true
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory ?? Directory.GetCurrentDirectory()
         };
+
+        if (environmentVariables != null)
+        {
+            foreach (var kvp in environmentVariables)
+            {
+                processInfo.Environment[kvp.Key] = kvp.Value;
+            }
+        }
 
         using var process = Process.Start(processInfo);
         if (process == null)
@@ -50,7 +61,7 @@ public class BashCommandRunner : IBashCommandRunner
             }
             catch
             {
-                // ignore errors when try to kill the process
+                // ignore errors when trying to kill the process
             }
             throw;
         }
