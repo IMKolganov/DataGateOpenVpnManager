@@ -17,7 +17,6 @@ public static class ServiceConfiguration
         // EasyRsa services
         services.AddScoped<IEasyRsaService, EasyRsaService>();
         services.AddScoped<IEasyRsaParseDbService, EasyRsaParseDbService>();
-        services.AddScoped<IEasyRsaExecCommandService, EasyRsaExecCommandService>();
         services.AddScoped<IBashCommandRunner, BashCommandRunner>();
         
         // OpenVpn services
