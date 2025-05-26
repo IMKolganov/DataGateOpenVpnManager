@@ -28,15 +28,23 @@ public static class PipelineConfiguration
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown version";
         var environmentName = app.Environment.EnvironmentName;
-        
-        app.MapGet("/",
-            () => Results.Json(new
-            {
-                version = version,
-                environment = environmentName,
-                application = "DataGateCertManager"
-            }));
 
+        app.MapGet("/", (IConfiguration config) => Results.Json(new
+        {
+            version,
+            environment = environmentName,
+            application = "DataGateCertManager",
+            description = "This service manages OpenVPN certificates and provides a JSON API for operations like create/revoke.",
+            config = new
+            {
+                easyRsaPath = config["EASY_RSA_PATH"],
+                dataDir = config["DATA_DIR"],
+                port = config["PORT"],
+                apiPort = config["API_PORT"],
+                proto = config["PROTO"],
+                mgmtPort = config["MGMT_PORT"]
+            }
+        }));
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
     }
 }
