@@ -76,7 +76,7 @@ public class EasyRsaService(
 
         _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
-        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+        var (output, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
             command,
             environmentVariables,
             cancellationToken,
@@ -85,8 +85,7 @@ public class EasyRsaService(
         if (exitCode != 0)
         {
             _logger.LogError("EasyRSA output:\n{Output}", output);
-            _logger.LogError("EasyRSA error:\n{Error}", error);
-            throw new Exception($"Error while building certificate: {error}. Output: {output}");
+            throw new Exception($"Error while building certificate: Output: {output}");
         }
 
         _logger.LogInformation("Certificate generated successfully:\n{Output}", output);
@@ -140,7 +139,7 @@ public class EasyRsaService(
             ["EASYRSA_PKI"] = pkiPath
         };
 
-        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+        var (output, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
             command,
             environmentVariables,
             cancellationToken,
@@ -148,21 +147,19 @@ public class EasyRsaService(
 
         if (exitCode == 0)
         {
-            serialNumber = ExtractSerialFromRevocationOutput(error) ?? string.Empty;
+            serialNumber = ExtractSerialFromRevocationOutput(output) ?? string.Empty;
             _logger.LogInformation("Certificate revoked successfully: " +
                                    "{CommonName}, SerialNumber: {SerialNumber}, " +
-                                   "Output: {Output} Error: {Error}", commonName, serialNumber, output, error);
+                                   "Output: {Output}", commonName, serialNumber, output);
         }
         else
         {
-            if (output.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase) ||
-                error.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase))
+            if (output.Contains("ERROR:Already revoked", StringComparison.OrdinalIgnoreCase))
             {
                 serverCertificate.Message = $"Certificate is already revoked: {commonName}";
                 _logger.LogWarning("Certificate is already revoked: {CommonName}", commonName);
             }
-            else if (output.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase) ||
-                     error.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase))
+            else if (output.Contains("ERROR: Certificate not found", StringComparison.OrdinalIgnoreCase))
             {
                 serverCertificate.Message = $"Certificate not found: {commonName}";
                 _logger.LogWarning("Certificate not found: {CommonName}", commonName);
@@ -213,7 +210,7 @@ public class EasyRsaService(
         {
             var chmodCommand = $"chmod +x ./easyrsa";
             
-            var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+            var (output, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
                 chmodCommand,
                 new Dictionary<string, string>(),
                 cancellationToken,
@@ -238,13 +235,13 @@ public class EasyRsaService(
             var initCommand = $"./easyrsa init-pki";
             _logger.LogInformation("Running EasyRSA init-pki...");
 
-            var (initOut, initErr, initExit) = await easyRsaExecCommandService.RunCommandAsync(
+            var (initOut, initExit) = await easyRsaExecCommandService.RunCommandAsync(
                 initCommand, env, cancellationToken);
 
             if (initExit != 0)
             {
-                _logger.LogError("init-pki failed. Output: {Output}, Error: {Error}", initOut, initErr);
-                throw new Exception($"Failed to initialize PKI. Error: {initErr}");
+                _logger.LogError("init-pki failed. Output: {Output}", initOut);
+                throw new Exception($"Failed to initialize PKI. Error: {initOut}");
             }
 
             _logger.LogInformation("PKI initialized successfully");
@@ -255,13 +252,13 @@ public class EasyRsaService(
             var buildCaCommand = $"./easyrsa build-ca nopass";
             _logger.LogInformation("No CA certificate found. Running build-ca...");
 
-            var (caOut, caErr, caExit) = await easyRsaExecCommandService.RunCommandAsync(
+            var (caOut, caExit) = await easyRsaExecCommandService.RunCommandAsync(
                 buildCaCommand, env, cancellationToken);
 
             if (caExit != 0)
             {
-                _logger.LogError("build-ca failed. Output: {Output}, Error: {Error}", caOut, caErr);
-                throw new Exception($"Failed to build CA certificate. Error: {caErr}");
+                _logger.LogError("build-ca failed. Output: {Output}", caOut);
+                throw new Exception($"Failed to build CA certificate. Error: {caOut}");
             }
 
             _logger.LogInformation("CA certificate created successfully");
@@ -288,7 +285,7 @@ public class EasyRsaService(
 
         var environmentVariables = new Dictionary<string, string>();
 
-        var (certOutput, certError, certExitCode) =
+        var (certOutput, certExitCode) =
             await easyRsaExecCommandService.RunCommandAsync(
                 certPathCommand, 
                 environmentVariables,  
@@ -297,7 +294,7 @@ public class EasyRsaService(
         
         if (certExitCode != 0)
         {
-            throw new Exception($"Error occurred while retrieving certificate serial: {certError}");
+            throw new Exception($"Error occurred while retrieving certificate serial: {certOutput}");
         }
 
         var serial = certOutput.Split('=')[1].Trim();
@@ -323,7 +320,7 @@ public class EasyRsaService(
 
         _logger.LogInformation("Executing EasyRSA CRL generation command: {Command}", command);
 
-        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+        var (output, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
             command,
             environmentVariables,
             cancellationToken,
@@ -331,8 +328,8 @@ public class EasyRsaService(
 
         if (exitCode != 0)
         {
-            _logger.LogError("CRL generation failed. Output: {Output}, Error: {Error}", output, error);
-            throw new Exception($"Failed to generate CRL. Error: {error}");
+            _logger.LogError("CRL generation failed. Output: {Output}", output);
+            throw new Exception($"Failed to generate CRL. Error: {output}");
         }
 
         if (!File.Exists(crlPath))

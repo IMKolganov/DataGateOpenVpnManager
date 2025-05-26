@@ -24,7 +24,7 @@ public class OpenVpnServerService(ILogger<OpenVpnServerService> logger,
 
         var command = $"openvpn --genkey --secret \"{taKeyName}\"";
 
-        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+        var (output, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
             command,
             environmentVariables: new Dictionary<string, string>(),
             cancellationToken: cancellationToken,
@@ -32,8 +32,8 @@ public class OpenVpnServerService(ILogger<OpenVpnServerService> logger,
 
         if (exitCode != 0)
         {
-            logger.LogError("Failed to generate TLS-auth key.\nOutput:\n{Output}\nError:\n{Error}", output, error);
-            throw new Exception($"Failed to generate TLS-auth key. Error: {error}");
+            logger.LogError("Failed to generate TLS-auth key.\nOutput:\n{Output}", output);
+            throw new Exception($"Failed to generate TLS-auth key.");
         }
 
         if (!File.Exists(taKeyPath))
