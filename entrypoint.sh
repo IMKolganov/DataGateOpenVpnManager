@@ -89,7 +89,7 @@ ca /etc/openvpn/ca.crt
 cert /etc/openvpn/server.crt
 key /etc/openvpn/server.key
 dh none
-ecdh-curve prime256v1
+tls-groups prime256v1
 
 topology subnet
 server 10.51.28.0 255.255.255.0
