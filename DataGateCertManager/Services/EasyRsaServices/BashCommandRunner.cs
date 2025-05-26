@@ -13,7 +13,7 @@ public class BashCommandRunner : IBashCommandRunner
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var processInfo = new ProcessStartInfo("bash", $"-c \"{command}\"")
+        var processInfo = new ProcessStartInfo("bash", $"-c \"{command} 2>&1\"")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
