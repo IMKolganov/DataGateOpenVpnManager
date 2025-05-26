@@ -89,7 +89,7 @@ ca /etc/openvpn/ca.crt
 cert /etc/openvpn/server.crt
 key /etc/openvpn/server.key
 dh none
-ecdh-curve prime256v1
+tls-groups prime256v1
 
 topology subnet
 server 10.51.28.0 255.255.255.0
@@ -162,6 +162,27 @@ openvpn --config "$DATA_DIR/server.conf" &
 OPENVPN_PID=$!
 
 echo "[entrypoint] Starting .NET application..."
+
+# Wait for .NET files
+echo "⏳ Waiting for DataGateCertManager.dll and dependencies to appear..."
+timeout=10
+elapsed=0
+
+while [ ! -f /app/DataGateCertManager.dll ] || [ ! -f /app/DataGateCertManager.runtimeconfig.json ]; do
+    if [ "$elapsed" -ge "$timeout" ]; then
+        echo "❌ ERROR: .NET files not found after ${timeout}s, exiting"
+        echo "🔍 /app contents:"
+        ls -la /app
+        exit 1
+    fi
+    echo "  ...still waiting (${elapsed}s)"
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
+
+echo "✅ Found required .NET files"
+cd /app
+
 dotnet DataGateCertManager.dll &
 DOTNET_PID=$!
 

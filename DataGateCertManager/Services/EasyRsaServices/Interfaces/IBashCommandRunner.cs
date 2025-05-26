@@ -2,7 +2,9 @@
 
 public interface IBashCommandRunner
 {
-    Task<(string Output, string Error, int ExitCode)> RunCommandAsync(
-        string command, 
-        CancellationToken cancellationToken);
+    Task<(string Output, int ExitCode)> RunCommandAsync(
+        string command,
+        Dictionary<string, string>? environmentVariables,
+        CancellationToken cancellationToken,
+        string? workingDirectory = null);
 }

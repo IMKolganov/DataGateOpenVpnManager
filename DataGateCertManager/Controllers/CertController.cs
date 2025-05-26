@@ -15,7 +15,7 @@ public class CertController(
     : ControllerBase
 {
     [HttpGet("GetAllCertificates")]
-    public async Task<ActionResult<List<ServerCertificate>>> GetAllCertificates()
+    public async Task<ActionResult<List<ServerCertificate>>> GetAllCertificates(CancellationToken cancellationToken)
     {
         try
         {
@@ -23,7 +23,7 @@ public class CertController(
 
             var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(
                 mainPath,
-                HttpContext.RequestAborted);
+                cancellationToken);
 
             return Ok(certificates);
         }
@@ -36,7 +36,7 @@ public class CertController(
     
     [HttpPost("AddServerCertificate")]
     public async Task<ActionResult<ServerCertificate>> AddServerCertificate(
-        [FromBody] AddServerCertificateRequest request)
+        [FromBody] AddServerCertificateRequest request, CancellationToken cancellationToken)
     {
         try
         {
@@ -49,7 +49,7 @@ public class CertController(
 
             var result = await easyRsaService.BuildCertificateAsync(
                 mainPath,
-                HttpContext.RequestAborted,
+                cancellationToken,
                 request.CommonName,
                 request.CertExpireDays);
 
@@ -64,7 +64,7 @@ public class CertController(
 
     [HttpPost("RevokeCertificate")]
     public async Task<ActionResult<ServerCertificate>> RevokeCertificate([FromBody] 
-        RevokeServerCertificateRequest request)
+        RevokeServerCertificateRequest request, CancellationToken cancellationToken)
     {
         try
         {
@@ -73,7 +73,7 @@ public class CertController(
             var result = await easyRsaService.RevokeCertificateAsync(
                 mainPath,
                 request.CommonName,
-                HttpContext.RequestAborted);
+                cancellationToken);
 
             return Ok(result);
         }
