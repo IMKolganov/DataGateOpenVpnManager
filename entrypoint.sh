@@ -163,13 +163,16 @@ OPENVPN_PID=$!
 
 echo "[entrypoint] Starting .NET application..."
 
-echo "⏳ Waiting for DataGateCertManager.dll to appear..."
+# Wait for .NET files
+echo "⏳ Waiting for DataGateCertManager.dll and dependencies to appear..."
 timeout=10
 elapsed=0
 
-while [ ! -f /app/DataGateCertManager.dll ]; do
+while [ ! -f /app/DataGateCertManager.dll ] || [ ! -f /app/DataGateCertManager.runtimeconfig.json ]; do
     if [ "$elapsed" -ge "$timeout" ]; then
-        echo "❌ ERROR: DataGateCertManager.dll not found after ${timeout}s, exiting"
+        echo "❌ ERROR: .NET files not found after ${timeout}s, exiting"
+        echo "🔍 /app contents:"
+        ls -la /app
         exit 1
     fi
     echo "  ...still waiting (${elapsed}s)"
@@ -177,7 +180,8 @@ while [ ! -f /app/DataGateCertManager.dll ]; do
     elapsed=$((elapsed + 1))
 done
 
-echo "✅ Found DataGateCertManager.dll, starting .NET app"
+echo "✅ Found required .NET files"
+cd /app
 
 dotnet DataGateCertManager.dll &
 DOTNET_PID=$!
