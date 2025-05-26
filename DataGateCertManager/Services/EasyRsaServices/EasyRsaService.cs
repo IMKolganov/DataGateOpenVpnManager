@@ -95,7 +95,7 @@ public class EasyRsaService(
             _logger.LogInformation("CRL updated successfully.");
         }
 
-        var certPath = ExtractCertificatePathFromOutput(output);
+        var certPath = GetIssuedCertPath(easyRsaPath, commonName); 
         var serialFromOpenSsl = await CheckCertInOpensslAsync(easyRsaPath, certPath, cancellationToken);
         var serverCertificate = await MatchingCertsAsync(easyRsaPath, serialFromOpenSsl, commonName, cancellationToken);
 
@@ -387,24 +387,8 @@ public class EasyRsaService(
         var match = Regex.Match(stderr, @"Revoking Certificate (\w{16,})", RegexOptions.IgnoreCase);
         return match.Success ? match.Groups[1].Value : null;
     }
-    private static string? ExtractCertificatePathFromOutput(string output)
+    private static string GetIssuedCertPath(string easyRsaDir, string commonName)
     {
-        const string marker = "Certificate created at:";
-    
-        using var reader = new StringReader(output);
-        string? line;
-        while ((line = reader.ReadLine()) != null)
-        {
-            if (line.StartsWith(marker))
-            {
-                var nextLine = reader.ReadLine();
-                if (nextLine != null && nextLine.Trim().StartsWith("*"))
-                {
-                    return nextLine.Trim().TrimStart('*', ' ');
-                }
-            }
-        }
-
-        return null;
+        return Path.Combine(easyRsaDir, "pki", "issued", $"{commonName}.crt");
     }
 }
