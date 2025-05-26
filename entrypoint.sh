@@ -162,6 +162,23 @@ openvpn --config "$DATA_DIR/server.conf" &
 OPENVPN_PID=$!
 
 echo "[entrypoint] Starting .NET application..."
+
+echo "⏳ Waiting for DataGateCertManager.dll to appear..."
+timeout=10
+elapsed=0
+
+while [ ! -f /app/DataGateCertManager.dll ]; do
+    if [ "$elapsed" -ge "$timeout" ]; then
+        echo "❌ ERROR: DataGateCertManager.dll not found after ${timeout}s, exiting"
+        exit 1
+    fi
+    echo "  ...still waiting (${elapsed}s)"
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
+
+echo "✅ Found DataGateCertManager.dll, starting .NET app"
+
 dotnet DataGateCertManager.dll &
 DOTNET_PID=$!
 
