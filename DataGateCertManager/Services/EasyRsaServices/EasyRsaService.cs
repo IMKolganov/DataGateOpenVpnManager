@@ -77,7 +77,10 @@ public class EasyRsaService(
         _logger.LogInformation("Executing EasyRSA command: {Command}", command);
 
         var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
-            command, environmentVariables, cancellationToken);
+            command,
+            environmentVariables,
+            cancellationToken,
+            easyRsaPath);
 
         if (exitCode != 0)
         {
@@ -94,7 +97,7 @@ public class EasyRsaService(
         }
 
         var certPath = ExtractCertificatePathFromOutput(output);
-        var serialFromOpenSsl = await CheckCertInOpensslAsync(certPath, cancellationToken);
+        var serialFromOpenSsl = await CheckCertInOpensslAsync(easyRsaPath, certPath, cancellationToken);
         var serverCertificate = await MatchingCertsAsync(easyRsaPath, serialFromOpenSsl, commonName, cancellationToken);
 
         if (!serverCertificate.SerialNumber.Contains(serialFromOpenSsl))
@@ -137,8 +140,11 @@ public class EasyRsaService(
             ["EASYRSA_PKI"] = pkiPath
         };
 
-        var (output, error, exitCode) =
-            await easyRsaExecCommandService.RunCommandAsync(command, environmentVariables, cancellationToken);
+        var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
+            command,
+            environmentVariables,
+            cancellationToken,
+            easyRsaPath);
 
         if (exitCode == 0)
         {
@@ -206,9 +212,12 @@ public class EasyRsaService(
         try
         {
             var chmodCommand = $"chmod +x ./easyrsa";
-            await easyRsaExecCommandService.RunCommandAsync(
+            
+            var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
                 chmodCommand,
-                new Dictionary<string, string>(),cancellationToken);
+                new Dictionary<string, string>(),
+                cancellationToken,
+                easyRsaPath);
         }
         catch (Exception ex)
         {
@@ -268,7 +277,8 @@ public class EasyRsaService(
         }
     }
 
-    private async Task<string> CheckCertInOpensslAsync(string? certPath, CancellationToken cancellationToken)
+    private async Task<string> CheckCertInOpensslAsync(string easyRsaPath, string? certPath, 
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(certPath))
             throw new ArgumentException("Certificate path is null or empty");
@@ -279,8 +289,12 @@ public class EasyRsaService(
         var environmentVariables = new Dictionary<string, string>();
 
         var (certOutput, certError, certExitCode) =
-            await easyRsaExecCommandService.RunCommandAsync(certPathCommand, environmentVariables,  cancellationToken);
-
+            await easyRsaExecCommandService.RunCommandAsync(
+                certPathCommand, 
+                environmentVariables,  
+                cancellationToken,
+                easyRsaPath);
+        
         if (certExitCode != 0)
         {
             throw new Exception($"Error occurred while retrieving certificate serial: {certError}");
@@ -312,7 +326,8 @@ public class EasyRsaService(
         var (output, error, exitCode) = await easyRsaExecCommandService.RunCommandAsync(
             command,
             environmentVariables,
-            cancellationToken);
+            cancellationToken,
+            easyRsaPath);
 
         if (exitCode != 0)
         {
