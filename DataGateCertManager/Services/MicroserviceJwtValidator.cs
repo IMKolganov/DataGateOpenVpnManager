@@ -14,7 +14,7 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
 
     public async Task InitAsync()
     {
-        _publicKey = await httpClient.GetStringAsync("api/Auth/PublicKey");
+        _publicKey = await httpClient.GetStringAsync("api/Auth/public-key");
     }
 
     public bool ValidateToken(string token, out ClaimsPrincipal? principal)

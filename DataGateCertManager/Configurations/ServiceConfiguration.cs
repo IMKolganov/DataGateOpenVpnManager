@@ -4,7 +4,6 @@ using DataGateCertManager.Services;
 using DataGateCertManager.Services.EasyRsaServices;
 using DataGateCertManager.Services.EasyRsaServices.Interfaces;
 using DataGateCertManager.Services.Interfaces;
-using Microsoft.Extensions.Configuration;
 
 namespace DataGateCertManager.Configurations;
 
