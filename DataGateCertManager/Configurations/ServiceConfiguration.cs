@@ -37,6 +37,8 @@ public static class ServiceConfiguration
 
         services.AddSingleton<IEasyRsaPathResolver, EasyRsaPathResolver>();
         
+        services.AddSingleton<IMicroserviceJwtValidator, MicroserviceJwtValidator>();
+        
         services.AddControllers();
 
         services.AddEndpointsApiExplorer();
