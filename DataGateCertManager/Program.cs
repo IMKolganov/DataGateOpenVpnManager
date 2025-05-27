@@ -9,7 +9,7 @@ var logger = Log.ForContext("SourceContext", "DILogger");
 var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown version";
 logger.Information($"Application version: {version};");
 
-builder.Services.ConfigureServices();
+builder.Services.ConfigureServices(builder.Configuration);
 builder.ConfigureWebHost();
 
 var app = builder.Build();
