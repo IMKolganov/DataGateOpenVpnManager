@@ -6,17 +6,15 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace DataGateCertManager.Services;
 
-public class MicroserviceJwtValidator : IMicroserviceJwtValidator
+public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<MicroserviceJwtValidator> logger)
+    : IMicroserviceJwtValidator
 {
-    private readonly ILogger<MicroserviceJwtValidator> _logger;
-    private readonly string _publicKey;
+    private readonly ILogger<MicroserviceJwtValidator> _logger = logger;
+    private string? _publicKey;
 
-    public MicroserviceJwtValidator(IConfiguration config, ILogger<MicroserviceJwtValidator> logger)
+    public async Task InitAsync()
     {
-        _logger = logger;
-
-        var backendUrl = config["Backend:PublicKeyEndpoint"];
-        _publicKey = new HttpClient().GetStringAsync(backendUrl).Result;
+        _publicKey = await httpClient.GetStringAsync("api/Auth/PublicKey");
     }
 
     public bool ValidateToken(string token, out ClaimsPrincipal? principal)
@@ -26,6 +24,10 @@ public class MicroserviceJwtValidator : IMicroserviceJwtValidator
         try
         {
             var rsa = RSA.Create();
+            if (string.IsNullOrEmpty(_publicKey))
+            {
+                throw new InvalidOperationException("Public key is empty");
+            }
             rsa.ImportFromPem(_publicKey.ToCharArray());
 
             var validationParameters = new TokenValidationParameters

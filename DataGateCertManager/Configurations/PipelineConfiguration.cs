@@ -1,10 +1,12 @@
 ﻿using System.Reflection;
+using DataGateCertManager.Services;
+using DataGateCertManager.Services.Interfaces;
 
 namespace DataGateCertManager.Configurations;
 
 public static class PipelineConfiguration
 {
-    public static void ConfigurePipeline(this WebApplication app)
+    public static async Task ConfigurePipeline(this WebApplication app)
     {
         app.UseStaticFiles();
         if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
@@ -46,5 +48,10 @@ public static class PipelineConfiguration
             }
         }));
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
+
+        using var scope = app.Services.CreateScope();
+        var jwtValidator = scope.ServiceProvider.GetRequiredService<IMicroserviceJwtValidator>();
+        if (jwtValidator is MicroserviceJwtValidator concrete)
+            await concrete.InitAsync();
     }
 }
