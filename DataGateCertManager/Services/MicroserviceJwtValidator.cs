@@ -14,7 +14,24 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
 
     public async Task InitAsync()
     {
-        _publicKey = await httpClient.GetStringAsync("api/Auth/public-key");
+        const int delaySeconds = 5;
+
+        while (true)
+        {
+            try
+            {
+                _logger.LogInformation("🔐 Attempt to fetch public key from backend...");
+                _publicKey = await httpClient.GetStringAsync("api/Auth/public-key");
+
+                _logger.LogInformation("✅ Successfully retrieved public key from backend.");
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Failed to get public key. Retrying in {Delay}s...", delaySeconds);
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+            }
+        }
     }
 
     public bool ValidateToken(string token, out ClaimsPrincipal? principal)
