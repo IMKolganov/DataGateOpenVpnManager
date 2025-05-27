@@ -39,14 +39,20 @@ public static class ServiceConfiguration
         services.AddSingleton<IEasyRsaPathResolver, EasyRsaPathResolver>();
 
         // HttpClient for MicroserviceJwtValidator
-        services.AddHttpClient<IMicroserviceJwtValidator, MicroserviceJwtValidator>(client =>
+        services.AddHttpClient<MicroserviceJwtValidator>(client =>
         {
             var baseUrl = config["Backend:BaseUrl"];
-            if (string.IsNullOrWhiteSpace(baseUrl))
-                throw new InvalidOperationException("Missing configuration: Backend:BaseUrl");
-
-            client.BaseAddress = new Uri(baseUrl);
+            client.BaseAddress = new Uri(baseUrl ?? throw new InvalidOperationException("Backend:BaseUrl is required"));
         });
+
+        services.AddSingleton<IMicroserviceJwtValidator>(sp =>
+        {
+            var client = sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(MicroserviceJwtValidator));
+            var logger = sp.GetRequiredService<ILogger<MicroserviceJwtValidator>>();
+            return new MicroserviceJwtValidator(client, logger);
+        });
+
+        services.AddHostedService<MicroserviceJwtValidatorInitializer>();
 
         services.AddControllers();
         services.AddEndpointsApiExplorer();

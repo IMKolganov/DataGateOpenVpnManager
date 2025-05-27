@@ -15,6 +15,6 @@ builder.ConfigureWebHost();
 var app = builder.Build();
 
 app.ConfigureMiddleware();
-await app.ConfigurePipeline();
+app.ConfigurePipeline();
 
 app.Run();
