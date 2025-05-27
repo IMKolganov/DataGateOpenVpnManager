@@ -8,16 +8,14 @@ namespace DataGateCertManager.Services;
 
 public class MicroserviceJwtValidator : IMicroserviceJwtValidator
 {
-    private readonly IConfiguration _config;
     private readonly ILogger<MicroserviceJwtValidator> _logger;
     private readonly string _publicKey;
 
     public MicroserviceJwtValidator(IConfiguration config, ILogger<MicroserviceJwtValidator> logger)
     {
-        _config = config;
         _logger = logger;
 
-        var backendUrl = _config["Backend:PublicKeyEndpoint"];
+        var backendUrl = config["Backend:PublicKeyEndpoint"];
         _publicKey = new HttpClient().GetStringAsync(backendUrl).Result;
     }
 
@@ -30,23 +28,34 @@ public class MicroserviceJwtValidator : IMicroserviceJwtValidator
             var rsa = RSA.Create();
             rsa.ImportFromPem(_publicKey.ToCharArray());
 
-            var parameters = new TokenValidationParameters
+            var validationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new RsaSecurityKey(rsa),
-                ValidateIssuer = false,
-                ValidateAudience = false,
+                ValidateIssuer = true,
+                ValidIssuer = "OpenVPNGateBackend",
+
+                ValidateAudience = true,
+                ValidAudience = "DataGateCertManager",
+
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(1)
+                ClockSkew = TimeSpan.FromMinutes(2)
             };
 
             var handler = new JwtSecurityTokenHandler();
-            principal = handler.ValidateToken(token, parameters, out _);
+            principal = handler.ValidateToken(token, validationParameters, out _);
+
+            if (!principal.HasClaim(c => c is { Type: "purpose", Value: "cert-create" }))
+                return false;
+
+            if (!principal.HasClaim(c => c is { Type: ClaimTypes.Role, Value: "backend" }))
+                return false;
+
             return true;
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogWarning(ex, "Failed to validate JWT");
+            principal = null;
             return false;
         }
     }
