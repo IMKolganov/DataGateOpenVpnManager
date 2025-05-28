@@ -117,13 +117,25 @@ persist-tun
 
 crl-verify $EASYRSA_DIR/pki/crl.pem
 
+# 🔧 Events
+script-security 2
+client-connect /etc/openvpn/scripts/client-connect.sh
+client-disconnect /etc/openvpn/scripts/client-disconnect.sh
+learn-address /etc/openvpn/scripts/learn-address.sh
+tls-verify /etc/openvpn/scripts/tls-verify.sh
+
+# 📊 Logs
 status $DATA_DIR/openvpn-status.log
 status-version 3
 log $DATA_DIR/openvpn.log
 log-append $DATA_DIR/openvpn.log
+
+# 🔌 Syslog 
 syslog
 
+# 🧠 Management interface
 management 0.0.0.0 $MGMT_PORT
+management-log-cache 100
 
 verb 4
 EOF
