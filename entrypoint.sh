@@ -11,6 +11,8 @@ VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
+SCRIPT_DIR="$DATA_DIR/scripts"
+mkdir -p "$SCRIPT_DIR"
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
@@ -119,10 +121,10 @@ crl-verify $EASYRSA_DIR/pki/crl.pem
 
 # 🔧 Events
 script-security 2
-client-connect /etc/openvpn/scripts/client-connect.sh
-client-disconnect /etc/openvpn/scripts/client-disconnect.sh
-learn-address /etc/openvpn/scripts/learn-address.sh
-tls-verify /etc/openvpn/scripts/tls-verify.sh
+client-connect $SCRIPT_DIR/client-connect.sh
+client-disconnect $SCRIPT_DIR/client-disconnect.sh
+learn-address $SCRIPT_DIR/learn-address.sh
+tls-verify $SCRIPT_DIR/tls-verify.sh
 
 # 📊 Logs
 status $DATA_DIR/openvpn-status.log

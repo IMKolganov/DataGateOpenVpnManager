@@ -35,5 +35,12 @@ public class VpnEventController(
         Console.WriteLine($"Client attempt: {data.CommonName} @ {data.VirtualAddress}");
         return Ok();
     }
+    
+    [HttpPost("tlsverify")]
+    public IActionResult OnTlsVerify([FromBody] VpnEventData data)
+    {
+        logger.LogInformation("TLS verified CN: {CommonName}, Depth: {Message}", data.CommonName, data.Message);
+        return Ok();
+    }
 }
 
