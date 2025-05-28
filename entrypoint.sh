@@ -12,7 +12,10 @@ VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_DIR="$DATA_DIR/scripts"
-mkdir -p "$SCRIPT_DIR"
+
+mkdir -p "$DATA_DIR/scripts"
+cp /scripts/*.sh "$DATA_DIR/scripts"
+chmod +x "$DATA_DIR/scripts/"*.sh
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
