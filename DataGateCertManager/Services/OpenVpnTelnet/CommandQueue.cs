@@ -8,7 +8,7 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
     private readonly ConcurrentQueue<PendingCommand> _pendingCommands = new();
     private readonly TelnetClient _telnetClient;
     private readonly List<IMessageSubscriber> _subscribers = new();
-    private readonly object _subscriberLock = new();
+    private readonly Lock _subscriberLock = new();
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ILogger<CommandQueue> _logger;

@@ -19,10 +19,10 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
 
     public async Task EnsureConnectedAsync(CancellationToken cancellationToken)
     {
-        if (IsConnected) return;
+        if (_client?.Connected == true && _stream != null)
+            return;
 
-        logger.LogWarning("🔌 Connection lost. Attempting to reconnect...");
-        await ConnectWithRetryAsync(cancellationToken);
+        await ConnectAsync(cancellationToken);
     }
 
     private async Task ConnectWithRetryAsync(CancellationToken cancellationToken)
