@@ -3,7 +3,7 @@ set -e
 
 PORT=${PORT:-1194}
 PROTO=${PROTO:-udp}
-MGMT_PORT=${MGMT_PORT:-5092}
+OpenVpnManagement__Port=${OpenVpnManagement__Port:-5092}
 DATA_DIR=${DATA_DIR:-/mnt}
 DNS1=${DNS1:-8.8.8.8}
 DNS2=${DNS2:-8.8.4.4}
@@ -11,11 +11,6 @@ VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
-SCRIPT_DIR="$DATA_DIR/scripts"
-
-mkdir -p "$DATA_DIR/scripts"
-cp /scripts/*.sh "$DATA_DIR/scripts"
-chmod +x "$DATA_DIR/scripts/"*.sh
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
@@ -122,25 +117,13 @@ persist-tun
 
 crl-verify $EASYRSA_DIR/pki/crl.pem
 
-# 🔧 Events
-script-security 2
-client-connect $SCRIPT_DIR/client-connect.sh
-client-disconnect $SCRIPT_DIR/client-disconnect.sh
-learn-address $SCRIPT_DIR/learn-address.sh
-tls-verify $SCRIPT_DIR/tls-verify.sh
-
-# 📊 Logs
 status $DATA_DIR/openvpn-status.log
 status-version 3
 log $DATA_DIR/openvpn.log
 log-append $DATA_DIR/openvpn.log
-
-# 🔌 Syslog 
 syslog
 
-# 🧠 Management interface
-management 0.0.0.0 $MGMT_PORT
-management-log-cache 100
+management 0.0.0.0 $OpenVpnManagement__Port
 
 verb 4
 EOF
