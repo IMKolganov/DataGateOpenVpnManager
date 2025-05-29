@@ -60,13 +60,18 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
 
     public async Task ConnectAsync(CancellationToken cancellationToken, int timeoutSec = 5)
     {
+        logger.LogInformation("🔌 Attempting to connect to OpenVPN management at {Host}:{Port}...", host, port);
+
         _client = new TcpClient();
 
         var connectTask = _client.ConnectAsync(host, port, cancellationToken).AsTask();
         if (await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(timeoutSec), cancellationToken)) != connectTask)
         {
+            logger.LogError("⏰ Connection to OpenVPN management at {Host}:{Port} timed out after {Timeout}s.", host, port, timeoutSec);
             throw new TimeoutException($"Timeout while connecting to {host}:{port}");
         }
+
+        logger.LogInformation("✅ TCP connection established to {Host}:{Port}.", host, port);
 
         _stream = _client.GetStream();
         _reader = new StreamReader(_stream, Encoding.ASCII);
@@ -74,6 +79,8 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
 
         _cancellationTokenSource = new CancellationTokenSource();
         _ = Task.Run(() => ListenAsync(_cancellationTokenSource.Token), cancellationToken);
+
+        logger.LogInformation("📡 Telnet listener started.");
     }
 
     private async Task ListenAsync(CancellationToken cancellationToken)
