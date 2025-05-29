@@ -123,7 +123,7 @@ log $DATA_DIR/openvpn.log
 log-append $DATA_DIR/openvpn.log
 syslog
 
-management 0.0.0.0 $OpenVpnManagement__Port
+management 127.0.0.1 $OpenVpnManagement__Port
 
 verb 4
 EOF
