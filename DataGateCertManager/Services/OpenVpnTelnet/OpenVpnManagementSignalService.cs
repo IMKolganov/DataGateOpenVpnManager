@@ -8,14 +8,17 @@ public class OpenVpnManagementSignalService(TelnetClient telnetClient, ILogger<C
     {
         try
         {
+            commandQueueLogger.LogInformation($"Sending command... command: {command}");
             return await _commandQueue.SendCommandAsync(command, cancellationToken);
         }
         catch (TimeoutException ex)
         {
+            commandQueueLogger.LogError(ex.Message);
             return $"Command timed out: {ex.Message}";
         }
         catch (Exception ex)
         {
+            commandQueueLogger.LogError(ex.Message);
             return $"Error while sending command: {ex.Message}";
         }
     }
