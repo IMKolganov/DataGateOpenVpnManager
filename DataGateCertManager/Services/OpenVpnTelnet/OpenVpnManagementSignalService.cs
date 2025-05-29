@@ -3,12 +3,12 @@
 public class OpenVpnManagementSignalService(TelnetClient telnetClient, ILogger<CommandQueue> commandQueueLogger)
 {
     private readonly CommandQueue _commandQueue = new(telnetClient, commandQueueLogger);
-
-    public async Task<string> SendStatusCommandAsync(CancellationToken cancellationToken)
+    
+    public async Task<string> SendCommandAsync(string command, CancellationToken cancellationToken)
     {
         try
         {
-            return await _commandQueue.SendCommandAsync("status", cancellationToken);
+            return await _commandQueue.SendCommandAsync(command, cancellationToken);
         }
         catch (TimeoutException ex)
         {
