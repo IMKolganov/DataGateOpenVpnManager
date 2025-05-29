@@ -107,10 +107,20 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
         if (_cts.IsCancellationRequested)
             throw new InvalidOperationException("[CommandQueue] Cannot send command — queue is disconnected.");
 
+        try
+        {
+            await _telnetClient.EnsureConnectedAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CommandQueue] Failed to reconnect before sending command.");
+            throw;
+        }
+
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pendingCommand = new PendingCommand(command, tcs);
 
-        using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+        await using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
 
         _pendingCommands.Enqueue(pendingCommand);
         await _telnetClient.SendAsync(command, cancellationToken);
@@ -124,6 +134,7 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
         _ = _pendingCommands.TryDequeue(out _);
         throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");
     }
+
 
     public (bool result, string? message) TryGetMessage()
     {
