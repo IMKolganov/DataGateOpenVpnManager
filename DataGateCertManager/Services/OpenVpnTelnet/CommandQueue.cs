@@ -130,6 +130,8 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
 
         if (completedTask == tcs.Task)
             return await tcs.Task;
+        
+        _logger.LogInformation("[CommandQueue] ✅ Received response for command: {Command}", command);
 
         _ = _pendingCommands.TryDequeue(out _);
         throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");

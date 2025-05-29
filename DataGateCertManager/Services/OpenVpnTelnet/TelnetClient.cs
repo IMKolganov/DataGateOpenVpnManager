@@ -19,9 +19,22 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
 
     public async Task EnsureConnectedAsync(CancellationToken cancellationToken)
     {
-        if (_client?.Connected == true && _stream != null)
-            return;
+        if (IsConnected)
+        {
+            try
+            {
+                await _writer!.WriteLineAsync(""); // ping
+                await _writer.FlushAsync(cancellationToken);
+                logger.LogDebug("✔ TelnetClient connection still alive.");
+                return;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "⚠ TelnetClient write check failed — reconnecting.");
+            }
+        }
 
+        logger.LogInformation("🔌 TelnetClient reconnecting...");
         await ConnectAsync(cancellationToken);
     }
 
@@ -106,15 +119,18 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
     {
         if (!IsConnected)
         {
-            throw new IOException("[TelnetClient] Cannot send: Not connected.");
+            logger.LogWarning("[TelnetClient] Not connected, attempting reconnect before send...");
+            await ConnectAsync(cancellationToken);
         }
 
         try
         {
+            logger.LogInformation("➡ Sending command: {Command}", command);
             await _writer!.WriteLineAsync(command.AsMemory(), cancellationToken);
         }
         catch (Exception ex)
         {
+            logger.LogError(ex, "❌ Failed to send command.");
             throw new IOException($"[TelnetClient] Failed to send command: {ex.Message}", ex);
         }
     }
