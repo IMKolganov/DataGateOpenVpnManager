@@ -5,8 +5,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
-        <AssemblyVersion>1.0.0.6</AssemblyVersion>
-        <FileVersion>1.0.0.6</FileVersion>
+        <AssemblyVersion>1.0.0.7</AssemblyVersion>
+        <FileVersion>1.0.0.7</FileVersion>
     </PropertyGroup>
 
     <ItemGroup>
