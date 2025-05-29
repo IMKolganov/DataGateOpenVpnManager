@@ -1,6 +1,5 @@
 ﻿using System.Reflection;
-using DataGateCertManager.Services;
-using DataGateCertManager.Services.Interfaces;
+using DataGateCertManager.Hubs;
 
 namespace DataGateCertManager.Configurations;
 
@@ -48,5 +47,8 @@ public static class PipelineConfiguration
             }
         }));
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
+        
+        //SignalR
+        app.MapHub<OpenVpnSignalHub>("/hub/openvpn");
     }
 }

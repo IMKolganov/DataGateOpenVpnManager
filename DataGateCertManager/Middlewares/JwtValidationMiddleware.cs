@@ -4,8 +4,24 @@ namespace DataGateCertManager.Middlewares;
 
 public class JwtValidationMiddleware(RequestDelegate next)
 {
+    private static readonly string[] ExcludedPaths =
+    {
+        "/hub/openvpn",
+        "/",
+        "/swagger",
+        "/swagger/index.html",
+        "/swagger/v1/swagger.json"
+    };
+
     public async Task Invoke(HttpContext context, IMicroserviceJwtValidator validator)
     {
+        // Skip token validation for Swagger and static files under /swagger
+        if (ExcludedPaths.Any(p => context.Request.Path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            await next(context);
+            return;
+        }
+
         var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
         if (authHeader?.StartsWith("Bearer ") == true)
         {

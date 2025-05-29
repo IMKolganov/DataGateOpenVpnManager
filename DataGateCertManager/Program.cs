@@ -10,6 +10,7 @@ var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "
 logger.Information($"Application version: {version};");
 
 builder.Services.ConfigureServices(builder.Configuration);
+builder.Services.ConfigureSignalR(builder.Configuration);
 builder.ConfigureWebHost();
 
 var app = builder.Build();
