@@ -49,6 +49,6 @@ public static class PipelineConfiguration
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
         
         //SignalR
-        app.MapHub<OpenVpnSignalHub>("/hub/openvpn");
+        app.MapHub<OpenVpnSignalHub>("/hubs/openvpn");
     }
 }
