@@ -28,4 +28,10 @@ public class OpenVpnSignalHub(OpenVpnManagementSignalService vpnService, ILogger
 
         await Clients.All.SendAsync("ReceiveCommandResult", result);
     }
+    
+    public async Task SendCommandWithRequestId(string requestId, string command)
+    {
+        var result = await vpnService.SendCommandAsync(command, Context.ConnectionAborted);
+        await Clients.Caller.SendAsync("ReceiveCommandResultWithRequestId", requestId, result);
+    }
 }
