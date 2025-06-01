@@ -7,6 +7,7 @@ public class JwtValidationMiddleware(RequestDelegate next)
     private static readonly string[] ExcludedPaths =
     {
         "/",
+        "/favicon.ico",
         "/swagger",
         "/swagger/index.html",
         "/swagger/v1/swagger.json"
