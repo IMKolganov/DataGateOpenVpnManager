@@ -13,6 +13,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataGateCertManager.Tests", "DataGateCertManager.Tests\DataGateCertManager.Tests.csproj", "{D6D62288-7FDA-4FF3-A476-9A557E9200DE}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{4F53A3D0-6814-457B-9CDD-F77866AC7673}"
+	ProjectSection(SolutionItems) = preProject
+		Scripts\client-connect.sh = Scripts\client-connect.sh
+		Scripts\client-disconnect.sh = Scripts\client-disconnect.sh
+		Scripts\learn-address.sh = Scripts\learn-address.sh
+		Scripts\log-watcher.sh = Scripts\log-watcher.sh
+		Scripts\server.conf = Scripts\server.conf
+		Scripts\tls-verify.sh = Scripts\tls-verify.sh
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,5 +37,8 @@ Global
 		{D6D62288-7FDA-4FF3-A476-9A557E9200DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D6D62288-7FDA-4FF3-A476-9A557E9200DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D6D62288-7FDA-4FF3-A476-9A557E9200DE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4F53A3D0-6814-457B-9CDD-F77866AC7673} = {31D8EA3A-DEA4-42F8-9E65-6C7F72F97781}
 	EndGlobalSection
 EndGlobal

@@ -56,6 +56,10 @@ ENV EASYRSA=/usr/share/easy-rsa \
     EASYRSA_CRL_DAYS=3650 \
     EASYRSA_PKI=$OPENVPN/pki
 
+# Copy OpenVPN hook scripts for both TCP and UDP data directories
+COPY Scripts /scripts
+RUN chmod +x /scripts/*.sh
+
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 

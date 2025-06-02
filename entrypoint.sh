@@ -3,7 +3,7 @@ set -e
 
 PORT=${PORT:-1194}
 PROTO=${PROTO:-udp}
-MGMT_PORT=${MGMT_PORT:-5092}
+OpenVpnManagement__Port=${OpenVpnManagement__Port:-5092}
 DATA_DIR=${DATA_DIR:-/mnt}
 DNS1=${DNS1:-8.8.8.8}
 DNS2=${DNS2:-8.8.4.4}
@@ -123,7 +123,7 @@ log $DATA_DIR/openvpn.log
 log-append $DATA_DIR/openvpn.log
 syslog
 
-management 0.0.0.0 $MGMT_PORT
+management 127.0.0.1 $OpenVpnManagement__Port
 
 verb 4
 EOF
