@@ -54,7 +54,7 @@ COPY --from=publish /app/publish .
 COPY Scripts /scripts
 RUN chmod +x /scripts/*.sh
 # Copy Certs folder if it exists
-COPY Certs /app/certs
+COPY Scripts/Certs/ /app/certs/
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
