@@ -1,4 +1,5 @@
-﻿using DataGateCertManager.Services.Interfaces;
+﻿using System.Net;
+using DataGateCertManager.Services.Interfaces;
 
 namespace DataGateCertManager.Middlewares;
 
@@ -6,37 +7,52 @@ public class JwtValidationMiddleware(RequestDelegate next)
 {
     private static readonly string[] ExcludedPaths =
     {
-        "/",
-        "/favicon.ico",
-        "/swagger",
-        "/swagger/index.html",
-        "/swagger/v1/swagger.json"
+        "/", "/favicon.ico", "/swagger", "/swagger/index.html", "/swagger/v1/swagger.json"
+    };
+
+    private static readonly string[] LocalOnlyPaths =
+    {
+        "/api/vpnEvent/connect",
+        "/api/vpnEvent/disconnect",
+        "/api/vpnEvent/tlsverify",
+        "/api/vpnEvent/attempt"
     };
 
     public async Task Invoke(HttpContext context, IMicroserviceJwtValidator validator)
     {
-        // Skip token validation for Swagger and static files under /swagger
-        if (ExcludedPaths.Any(p => context.Request.Path.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
+        var requestPath = context.Request.Path;
+
+        // Allow unauthenticated access to Swagger and other excluded paths
+        if (ExcludedPaths.Any(p => requestPath.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
         {
             await next(context);
             return;
         }
 
-        string? token = null;
+        // Allow access to selected API paths from localhost without JWT
+        var remoteIp = context.Connection.RemoteIpAddress;
+        if (LocalOnlyPaths.Any(p => requestPath.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)) &&
+            (remoteIp is not null && (IPAddress.IsLoopback(remoteIp) || remoteIp.ToString() == "::1")))
+        {
+            await next(context);
+            return;
+        }
 
-        // Try to get token from Authorization header
+        // Attempt to extract token from Authorization header
+        string? token = null;
         var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
         if (authHeader?.StartsWith("Bearer ") == true)
         {
             token = authHeader.Substring("Bearer ".Length);
         }
 
-        // Fallback to access_token query param (e.g., for SignalR WebSocket auth)
+        // Fallback: check query string for access_token (e.g., for WebSocket auth)
         if (string.IsNullOrWhiteSpace(token))
         {
             token = context.Request.Query["access_token"];
         }
 
+        // Validate token
         if (!string.IsNullOrWhiteSpace(token) && validator.ValidateToken(token, out var principal))
         {
             context.User = principal ?? throw new InvalidOperationException("Principal is null");
@@ -44,6 +60,7 @@ public class JwtValidationMiddleware(RequestDelegate next)
             return;
         }
 
+        // Reject request if no valid token is found and not allowed by IP/path
         context.Response.StatusCode = 401;
         await context.Response.WriteAsync("Unauthorized");
     }

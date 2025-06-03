@@ -1,9 +1,5 @@
-﻿using DataGateCertManager.Helpers;
-using DataGateCertManager.Models;
-using DataGateCertManager.Services.Interfaces;
+﻿using DataGateCertManager.Models;
 using Microsoft.AspNetCore.Mvc;
-using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Requests;
-using OpenVPNGateMonitor.SharedModels.DataGateCertManager.OvpnFile.Responses;
 
 namespace DataGateCertManager.Controllers;
 
