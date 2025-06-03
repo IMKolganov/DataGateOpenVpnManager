@@ -51,10 +51,8 @@ WORKDIR /app
 COPY --from=publish /app/publish .
 
 # Copy scripts and entrypoint
-COPY Scripts /scripts
+COPY scripts /scripts
 RUN chmod +x /scripts/*.sh
-# Copy Certs folder if it exists
-COPY Scripts/Certs/ /app/certs/
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh

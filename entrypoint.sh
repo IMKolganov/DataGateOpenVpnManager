@@ -10,7 +10,8 @@ DNS2=${DNS2:-8.8.4.4}
 VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
-CERT_SOURCE="/app/certs"
+CERT_SOURCE="/scripts/certs"
+SCRIPT_SOURCE="/scripts"
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
@@ -102,6 +103,18 @@ declare -A FILES_TO_COPY=(
   ["$EASYRSA_DIR/pki/ta.key"]="/etc/openvpn/ta.key"
 )
 
+echo "===== Copying OpenVPN hook scripts from $SCRIPT_SOURCE to /etc/openvpn/scripts ====="
+mkdir -p /etc/openvpn/scripts
+
+for SCRIPT in client-connect.sh client-disconnect.sh learn-address.sh tls-verify.sh log-watcher.sh; do
+  if [ -f "$SCRIPT_SOURCE/$SCRIPT" ]; then
+    cp "$SCRIPT_SOURCE/$SCRIPT" /etc/openvpn/scripts/$SCRIPT && chmod +x /etc/openvpn/scripts/$SCRIPT
+    echo "✅ Copied and made executable: $SCRIPT"
+  else
+    echo "⚠️ WARNING: $SCRIPT not found in $SCRIPT_SOURCE"
+  fi
+done
+
 for SRC in "${!FILES_TO_COPY[@]}"; do
   DEST=${FILES_TO_COPY[$SRC]}
   if [ -f "$SRC" ]; then
@@ -161,6 +174,12 @@ syslog
 
 management 127.0.0.1 $OpenVpnManagement__Port
 
+script-security 2
+client-connect /etc/openvpn/scripts/client-connect.sh
+client-disconnect /etc/openvpn/scripts/client-disconnect.sh
+learn-address /etc/openvpn/scripts/learn-address.sh
+tls-verify /etc/openvpn/scripts/tls-verify.sh
+
 verb 4
 EOF
 fi
@@ -191,7 +210,7 @@ ls -l "$DATA_DIR"
 [ -d "$EASYRSA_DIR/pki" ] && ls -l "$EASYRSA_DIR/pki"
 
 # Show config
-{ sleep 0.1; echo "===== server.conf contents ====="; cat "$DATA_DIR/server.conf"; } &
+{ sleep 3; echo "===== server.conf contents ====="; cat "$DATA_DIR/server.conf"; } &
 
 # Launch OpenVPN
 echo "===== Starting OpenVPN in background... ====="
