@@ -1,6 +1,6 @@
 #!/bin/bash
 
-curl -X POST http://localhost:5000/api/vpnEvent/connect \
+curl -X POST http://localhost:__API_PORT__/api/vpnEvent/connect \
   -H "Content-Type: application/json" \
   -d "{
     \"CommonName\": \"$common_name\",

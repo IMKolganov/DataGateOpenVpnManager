@@ -103,12 +103,17 @@ declare -A FILES_TO_COPY=(
   ["$EASYRSA_DIR/pki/ta.key"]="/etc/openvpn/ta.key"
 )
 
-echo "===== Copying OpenVPN hook scripts from $SCRIPT_SOURCE to /etc/openvpn/scripts ====="
+echo "===== Copying and configuring OpenVPN hook scripts from $SCRIPT_SOURCE to /etc/openvpn/scripts ====="
 mkdir -p /etc/openvpn/scripts
 
 for SCRIPT in client-connect.sh client-disconnect.sh learn-address.sh tls-verify.sh log-watcher.sh; do
-  if [ -f "$SCRIPT_SOURCE/$SCRIPT" ]; then
-    cp "$SCRIPT_SOURCE/$SCRIPT" /etc/openvpn/scripts/$SCRIPT && chmod +x /etc/openvpn/scripts/$SCRIPT
+  SOURCE_PATH="$SCRIPT_SOURCE/$SCRIPT"
+  TARGET_PATH="/etc/openvpn/scripts/$SCRIPT"
+
+  if [ -f "$SOURCE_PATH" ]; then
+    echo "🔧 Replacing __API_PORT__ in $SCRIPT with $API_PORT"
+    sed "s|__API_PORT__|${API_PORT}|g" "$SOURCE_PATH" > "$TARGET_PATH"
+    chmod +x "$TARGET_PATH"
     echo "✅ Copied and made executable: $SCRIPT"
   else
     echo "⚠️ WARNING: $SCRIPT not found in $SCRIPT_SOURCE"
@@ -210,7 +215,7 @@ ls -l "$DATA_DIR"
 [ -d "$EASYRSA_DIR/pki" ] && ls -l "$EASYRSA_DIR/pki"
 
 # Show config
-{ sleep 3; echo "===== server.conf contents ====="; cat "$DATA_DIR/server.conf"; } &
+{ sleep 0.3; echo "===== server.conf contents ====="; cat "$DATA_DIR/server.conf"; } &
 
 # Launch OpenVPN
 echo "===== Starting OpenVPN in background... ====="

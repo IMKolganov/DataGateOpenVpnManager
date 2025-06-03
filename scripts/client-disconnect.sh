@@ -1,6 +1,6 @@
 #!/bin/bash
 
-curl -X POST http://localhost:5000/api/vpnEvent/disconnect \
+curl -X POST http://localhost:__API_PORT__/api/vpnEvent/disconnect \
   -H "Content-Type: application/json" \
   -d "{
     \"CommonName\": \"$common_name\",

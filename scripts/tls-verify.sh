@@ -5,7 +5,7 @@ common_name="$2"
 
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-curl -X POST http://localhost:5000/api/vpnEvent/tlsverify \
+curl -X POST http://localhost:__API_PORT__/api/vpnEvent/tlsverify \
   -H "Content-Type: application/json" \
   -d "{
     \"CommonName\": \"$common_name\",
