@@ -1,15 +1,11 @@
 services:
   openvpn-main-udp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        TARGETARCH: "arm64"
-        BUILD_CONFIGURATION: "Debug"
+    image: imkolganov/openvpn-gate-monitor-openvpn:latest
+    pull_policy: always
     container_name: openvpn-main-udp
     restart: unless-stopped
     networks:
-      - openvpn_network
+      - backend_network
     cap_add:
       - NET_ADMIN
     devices:
@@ -27,10 +23,12 @@ services:
       PROTO: udp
       OpenVpnManagement__Port: "5095"
       OpenVpnManagement__Host: "localhost"
-      BACKEND__BASEURL: "http://192.168.0.2:5581/"
+      BACKEND__BASEURL: "http://localhost:5581/"
 
 networks:
   openvpn_network:
+    driver: bridge
+  backend_network:
     driver: bridge
 
 volumes:
