@@ -21,6 +21,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{4F53
 		Scripts\log-watcher.sh = Scripts\log-watcher.sh
 		Scripts\server.conf = Scripts\server.conf
 		Scripts\tls-verify.sh = Scripts\tls-verify.sh
+		docker-compose.yml = docker-compose.yml
 	EndProjectSection
 EndProject
 Global
