@@ -9,10 +9,20 @@ DNS1=${DNS1:-8.8.8.8}
 DNS2=${DNS2:-8.8.4.4}
 VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
-
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
+CERT_SOURCE="/app/certs"
 
 echo "===== STARTING OPENVPN CONTAINER ====="
+
+# Check if pre-generated certs exist in /app/certs
+USE_PREEXISTING_CERTS=false
+if [ -f "$CERT_SOURCE/ca.crt" ] && [ -f "$CERT_SOURCE/server.crt" ] && \
+   [ -f "$CERT_SOURCE/server.key" ] && [ -f "$CERT_SOURCE/ta.key" ]; then
+    echo "📦 Found complete pre-generated cert set in $CERT_SOURCE"
+    USE_PREEXISTING_CERTS=true
+else
+    echo "🛠️  Pre-generated certs not found or incomplete. Will generate."
+fi
 
 # Enable IP forwarding
 iptables -P FORWARD ACCEPT
@@ -23,42 +33,59 @@ iptables -t nat -A POSTROUTING -s 10.51.28.0/24 -o eth0 -j MASQUERADE
 echo "===== Checking contents of $DATA_DIR before starting..."
 ls -l "$DATA_DIR"
 
-if [ ! -x "$EASYRSA_DIR/easyrsa" ]; then
-    echo "Copying Easy-RSA to $EASYRSA_DIR..."
-    mkdir -p "$EASYRSA_DIR"
-    cp -r /usr/share/easy-rsa/* "$EASYRSA_DIR"
-    chmod +x "$EASYRSA_DIR/easyrsa"
-fi
+if [ "$USE_PREEXISTING_CERTS" = true ]; then
+    echo "Copying certs from $CERT_SOURCE..."
 
-if [ ! -f "$EASYRSA_DIR/easyrsa" ] || [ ! -x "$EASYRSA_DIR/easyrsa" ]; then
-    echo "ERROR: Easy-RSA script not found or not executable at $EASYRSA_DIR/easyrsa"
-    echo "Please ensure Easy-RSA v3 is installed and placed correctly."
-    exit 1
-fi
+    mkdir -p /etc/openvpn
+    mkdir -p "$EASYRSA_DIR/pki"
 
-if [ ! -d "$EASYRSA_DIR/pki" ]; then
-    echo "PKI not found. Initializing..."
+    cp "$CERT_SOURCE/ca.crt"        /etc/openvpn/ca.crt
+    cp "$CERT_SOURCE/server.crt"    /etc/openvpn/server.crt
+    cp "$CERT_SOURCE/server.key"    /etc/openvpn/server.key
+    cp "$CERT_SOURCE/ta.key"        /etc/openvpn/ta.key
+    [ -f "$CERT_SOURCE/crl.pem" ] && cp "$CERT_SOURCE/crl.pem" "$EASYRSA_DIR/pki/crl.pem"
+else
+    # Copy Easy-RSA templates if missing
+    if [ ! -x "$EASYRSA_DIR/easyrsa" ]; then
+        echo "Copying Easy-RSA to $EASYRSA_DIR..."
+        mkdir -p "$EASYRSA_DIR"
+        cp -r /usr/share/easy-rsa/* "$EASYRSA_DIR"
+        chmod +x "$EASYRSA_DIR/easyrsa"
+    fi
+
+    # Ensure easyrsa script is present and executable
+    if [ ! -f "$EASYRSA_DIR/easyrsa" ] || [ ! -x "$EASYRSA_DIR/easyrsa" ]; then
+        echo "ERROR: Easy-RSA script not found or not executable at $EASYRSA_DIR/easyrsa"
+        exit 1
+    fi
+
+    # Initialize PKI and generate certificates
     cd "$EASYRSA_DIR"
-
     export EASYRSA_BATCH=1
     export EASYRSA_REQ_CN="OpenVPN-Server"
     export EASYRSA_PKI="$EASYRSA_DIR/pki"
 
-    ./easyrsa --batch init-pki
-    ./easyrsa --batch build-ca nopass
-    ./easyrsa --batch gen-req server nopass
-    ./easyrsa --batch sign-req server server
-fi
+    ./easyrsa init-pki
+    ./easyrsa build-ca nopass
+    ./easyrsa gen-req server nopass
+    ./easyrsa sign-req server server
 
-# Ensure ta.key exists
-if [ ! -f "$EASYRSA_DIR/pki/ta.key" ]; then
-    echo "===== Generating new ta.key (tls-crypt)..."
+    # Generate tls-crypt key
     openvpn --genkey secret "$EASYRSA_DIR/pki/ta.key"
-else
-    echo "ta.key already exists."
+
+    # Generate empty CRL
+    ./easyrsa gen-crl
+    chmod 644 "$EASYRSA_DIR/pki/crl.pem"
+
+    # Copy generated certs to OpenVPN directory
+    mkdir -p /etc/openvpn
+    cp "$EASYRSA_DIR/pki/ca.crt"              /etc/openvpn/ca.crt
+    cp "$EASYRSA_DIR/pki/issued/server.crt"   /etc/openvpn/server.crt
+    cp "$EASYRSA_DIR/pki/private/server.key"  /etc/openvpn/server.key
+    cp "$EASYRSA_DIR/pki/ta.key"              /etc/openvpn/ta.key
 fi
 
-# Ensure all required files are in /etc/openvpn
+# Copy necessary certs from PKI to OpenVPN runtime directory
 echo "===== Copying necessary certs and keys to /etc/openvpn..."
 declare -A FILES_TO_COPY=(
   ["$EASYRSA_DIR/pki/ca.crt"]="/etc/openvpn/ca.crt"
@@ -92,7 +119,7 @@ dh none
 tls-groups prime256v1
 
 topology subnet
-server 10.51.28.0 255.255.255.0
+server $VPN_SUBNET $VPN_NETMASK
 ifconfig-pool-persist /etc/openvpn/ipp.txt
 
 push "dhcp-option DNS $DNS1"
@@ -129,13 +156,13 @@ verb 4
 EOF
 fi
 
-# Prepare log files
+# Initialize and set permissions for log files
 echo "Clearing logs..."
 truncate -s 0 "$DATA_DIR/openvpn.log" || touch "$DATA_DIR/openvpn.log"
 truncate -s 0 "$DATA_DIR/openvpn-status.log" || touch "$DATA_DIR/openvpn-status.log"
 chmod 777 "$DATA_DIR/openvpn.log" "$DATA_DIR/openvpn-status.log"
 
-# Ensure crl.pem exists
+# Ensure CRL exists
 if [ ! -f "$EASYRSA_DIR/pki/crl.pem" ]; then
     echo "Generating crl.pem (empty revocation list)..."
     cd "$EASYRSA_DIR"
@@ -146,7 +173,7 @@ else
 fi
 chmod 644 "$EASYRSA_DIR/pki/crl.pem"
 
-# Add read/execute permissions to everything inside DATA_DIR
+# Set read and execute permissions for DATA_DIR
 echo "Setting permissions for $DATA_DIR recursively..."
 chmod -R a+rX "$DATA_DIR"
 
@@ -157,10 +184,12 @@ ls -l "$DATA_DIR"
 echo "===== server.conf contents ====="
 cat "$DATA_DIR/server.conf" || echo "server.conf not found!"
 
+# Start OpenVPN in background
 echo "===== Starting OpenVPN in background..."
 openvpn --config "$DATA_DIR/server.conf" &
 OPENVPN_PID=$!
 
+# Wait for .NET application
 echo "[entrypoint] Starting .NET application..."
 
 # Wait for .NET files
@@ -186,6 +215,7 @@ cd /app
 dotnet DataGateCertManager.dll &
 DOTNET_PID=$!
 
+# Wait for both processes to complete
 wait $OPENVPN_PID
 OPENVPN_EXIT_CODE=$?
 

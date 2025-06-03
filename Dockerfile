@@ -9,6 +9,8 @@ ARG TARGETARCH
 RUN if [ -z "$TARGETARCH" ]; then echo "ERROR: TARGETARCH is not set!"; exit 1; fi
 RUN echo "BUILD STAGE: TARGETARCH=${TARGETARCH}"
 
+LABEL maintainer="Ivan Kolganov with ❤️ via Kyle Manna's template"
+
 # Set the working directory
 WORKDIR /src
 
@@ -29,7 +31,7 @@ RUN echo "Using build configuration: $BUILD_CONFIGURATION" && \
       -c $BUILD_CONFIGURATION \
       -o /app/publish
 
-# Use the ASP.NET runtime for the final image (framework-dependent)
+# Final runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 
 # Use root initially to allow setting permissions
@@ -48,17 +50,11 @@ WORKDIR /app
 # Copy published app
 COPY --from=publish /app/publish .
 
-LABEL maintainer="Ivan Kolganov with ❤️ via Kyle Manna's template"
-
-# Environment for easy-rsa and OpenVPN
-ENV OPENVPN=/etc/openvpn
-ENV EASYRSA=/usr/share/easy-rsa \
-    EASYRSA_CRL_DAYS=3650 \
-    EASYRSA_PKI=$OPENVPN/pki
-
-# Copy OpenVPN hook scripts for both TCP and UDP data directories
+# Copy scripts and entrypoint
 COPY Scripts /scripts
 RUN chmod +x /scripts/*.sh
+# Copy Certs folder if it exists
+COPY Certs /app/certs
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh

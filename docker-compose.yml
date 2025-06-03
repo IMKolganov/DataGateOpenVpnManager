@@ -1,8 +1,8 @@
 services:
-  openvpn_udp:
+  openvpn-main-udp:
     image: imkolganov/openvpn-gate-monitor-openvpn:latest
     pull_policy: always
-    container_name: openvpn_udp
+    container_name: openvpn-main-udp
     restart: unless-stopped
     networks:
       - backend_network
@@ -11,16 +11,25 @@ services:
     devices:
       - "/dev/net/tun:/dev/net/tun"
     volumes:
-      - openvpn_data_udp:/openvpn-udp
+      - openvpn_data_main_udp:/openvpn-main-udp
     ports:
-      - "1194:1194/udp"
-      - "5010:5010"
+      - "1295:1295/udp"
+      - "5009:5009"
     environment:
-      EASY_RSA_PATH: "/openvpn-udp/easy-rsa"
-      DATA_DIR: /openvpn-udp
-      PORT: "1194"
-      API_PORT: 5010
+      EASY_RSA_PATH: "/openvpn-main-udp/easy-rsa"
+      DATA_DIR: /openvpn-main-udp
+      PORT: "1295"
+      API_PORT: 5009
       PROTO: udp
-      OpenVpnManagement__Port: "5092"
+      OpenVpnManagement__Port: "5095"
       OpenVpnManagement__Host: "localhost"
-      BACKEND__BASEURL: "http://backend:5581/"
+      BACKEND__BASEURL: "http://localhost:5581/"
+
+networks:
+  openvpn_network:
+    driver: bridge
+  backend_network:
+    driver: bridge
+
+volumes:
+  openvpn_data_main_udp:
