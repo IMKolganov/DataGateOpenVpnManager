@@ -76,7 +76,7 @@ else
 
     cd "$EASYRSA_DIR"
     export EASYRSA_BATCH=1
-    export EASYRSA_REQ_CN="OpenVPN-Server"
+#    export EASYRSA_REQ_CN="OpenVPN-Server"
     export EASYRSA_PKI="$EASYRSA_DIR/pki"
 
     ./easyrsa init-pki
