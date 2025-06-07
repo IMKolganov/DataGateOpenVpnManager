@@ -15,7 +15,7 @@ public class OvpnFileController(
     : ControllerBase
 {
     [HttpPost("AddOvpnFile")]
-    public async Task<ActionResult<OvpnFileMetadata>> AddOvpnFile([FromBody] AddOvpnFileRequest request,
+    public async Task<ActionResult<OvpnFileMetadata>> AddOvpnFile([FromBody] GenerateOvpnFileRequest request,
         CancellationToken cancellationToken)
     {
         try
