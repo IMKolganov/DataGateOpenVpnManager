@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        TARGETARCH: "arm64"
+        TARGETARCH: "amd64"
         BUILD_CONFIGURATION: "Debug"
     container_name: openvpn-main-udp
     restart: unless-stopped
@@ -27,7 +27,7 @@ services:
       PROTO: udp
       OpenVpnManagement__Port: "5095"
       OpenVpnManagement__Host: "localhost"
-      BACKEND__BASEURL: "http://localhost:5581/"
+      BACKEND__BASEURL: "http://192.168.0.2:5581/"
 
 networks:
   openvpn_network:

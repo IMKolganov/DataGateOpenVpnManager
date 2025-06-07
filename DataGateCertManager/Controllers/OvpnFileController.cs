@@ -22,6 +22,11 @@ public class OvpnFileController(
         {
             var mainPath = easyRsaPathResolver.GetEasyRsaPath();
 
+            if (string.IsNullOrEmpty(request.CommonName) || string.IsNullOrEmpty(request.ConfigTemplate))//todo: fix
+            {
+                throw new NullReferenceException("Common name and config template are required");
+            }
+
             var result = await ovpnFileService.AddOvpnFile(
                 mainPath,
                 request.CommonName,

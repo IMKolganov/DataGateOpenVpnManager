@@ -1,42 +1,46 @@
-﻿using DataGateCertManager.Models;
+﻿using DataGateCertManager.Hubs;
+using DataGateCertManager.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace DataGateCertManager.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class VpnEventController(
-    ILogger<VpnEventController> logger)
+    ILogger<VpnEventController> logger,
+    IHubContext<OpenVpnEventHub> hubContext)
     : ControllerBase
 {
     [HttpPost("connect")]
-    public IActionResult OnClientConnect([FromBody] VpnEventData data)
+    public async Task<IActionResult> OnClientConnect([FromBody] VpnEventData data)
     {
-        // Log or process the connection
         Console.WriteLine($"Client connected: {data.CommonName}, IP: {data.RealAddress}");
+        await hubContext.Clients.All.SendAsync("ClientConnected", data);
         return Ok();
     }
 
     [HttpPost("disconnect")]
-    public IActionResult OnClientDisconnect([FromBody] VpnEventData data)
+    public async Task<IActionResult> OnClientDisconnect([FromBody] VpnEventData data)
     {
-        // Log or process the disconnection
         Console.WriteLine($"Client disconnected: {data.CommonName}, Duration: {data.ConnectedSince}");
+        await hubContext.Clients.All.SendAsync("ClientDisconnected", data);
         return Ok();
     }
-    
+
     [HttpPost("attempt")]
-    public IActionResult OnClientAttempt([FromBody] VpnEventData data)
+    public async Task<IActionResult> OnClientAttempt([FromBody] VpnEventData data)
     {
         Console.WriteLine($"Client attempt: {data.CommonName} @ {data.VirtualAddress}");
+        await hubContext.Clients.All.SendAsync("ClientAttempted", data);
         return Ok();
     }
-    
+
     [HttpPost("tlsverify")]
-    public IActionResult OnTlsVerify([FromBody] VpnEventData data)
+    public async Task<IActionResult> OnTlsVerify([FromBody] VpnEventData data)
     {
         logger.LogInformation("TLS verified CN: {CommonName}, Depth: {Message}", data.CommonName, data.Message);
+        await hubContext.Clients.All.SendAsync("TlsVerified", data);
         return Ok();
     }
 }
-
