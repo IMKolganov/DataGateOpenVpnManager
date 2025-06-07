@@ -65,15 +65,16 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
             principal = handler.ValidateToken(token, validationParameters, out _);
 
             if (!principal.HasClaim(c => c is { Type: "purpose", Value: "cert-create" }))
-                return false;
+                throw new Exception("Missing required claim: purpose=cert-create");
 
             if (!principal.HasClaim(c => c is { Type: ClaimTypes.Role, Value: "backend" }))
-                return false;
+                throw new Exception("Missing required role claim: backend");
 
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning("❌ Token validation error: {Message}", ex.Message);
             principal = null;
             return false;
         }
