@@ -80,9 +80,10 @@ done
 # Generate default server.conf if not present
 if [ ! -f "$DATA_DIR/server.conf" ]; then
     echo "Generating default server.conf..."
-    cat <<EOF > "$DATA_DIR/server.conf"
-port $PORT
-proto $PROTO
+
+    cat > "$DATA_DIR/server.conf" <<'EOF'
+port '"$PORT"'
+proto '"$PROTO"'
 dev tun
 
 ca /etc/openvpn/ca.crt
@@ -95,8 +96,8 @@ topology subnet
 server 10.51.28.0 255.255.255.0
 ifconfig-pool-persist /etc/openvpn/ipp.txt
 
-push "dhcp-option DNS $DNS1"
-push "dhcp-option DNS $DNS2"
+push "dhcp-option DNS '"$DNS1"'" 
+push "dhcp-option DNS '"$DNS2"'" 
 push "block-outside-dns"
 push "redirect-gateway def1"
 
@@ -115,15 +116,15 @@ group nogroup
 persist-key
 persist-tun
 
-crl-verify $EASYRSA_DIR/pki/crl.pem
+crl-verify '"$EASYRSA_DIR"'/pki/crl.pem
 
-status $DATA_DIR/openvpn-status.log
+status '"$DATA_DIR"'/openvpn-status.log
 status-version 3
-log $DATA_DIR/openvpn.log
-log-append $DATA_DIR/openvpn.log
+log '"$DATA_DIR"'/openvpn.log
+log-append '"$DATA_DIR"'/openvpn.log
 syslog
 
-management 127.0.0.1 $OpenVpnManagement__Port
+management 127.0.0.1 '"$OpenVpnManagement__Port"'
 
 verb 4
 EOF
