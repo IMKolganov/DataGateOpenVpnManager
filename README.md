@@ -145,3 +145,4 @@ GitHub: [IMKolganov/DataGateCertManager](https://github.com/IMKolganov/DataGateC
 ## 📄 License
 
 MIT License
+.

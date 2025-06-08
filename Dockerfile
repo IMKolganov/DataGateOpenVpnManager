@@ -54,14 +54,13 @@ COPY --from=publish /app/publish .
 
 # Copy scripts and entrypoint
 COPY scripts /scripts
-RUN chmod +x /scripts/*.sh
-
-# Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 
-# 🔧 Convert CRLF to LF just in case
-RUN sed -i 's/\r$//' /entrypoint.sh
+# 🔧 Convert CRLF to LF
+RUN sed -i 's/\r$//' /entrypoint.sh && \
+    find /scripts -name '*.sh' -exec sed -i 's/\r$//' {} +
 
-RUN chmod +x /entrypoint.sh
+# Make scripts executable
+RUN chmod +x /entrypoint.sh && chmod +x /scripts/*.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
