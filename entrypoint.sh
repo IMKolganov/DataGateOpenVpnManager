@@ -215,6 +215,10 @@ while [ ! -f /app/DataGateCertManager.dll ] || [ ! -f /app/DataGateCertManager.r
     elapsed=$((elapsed + 1))
 done
 
+runuser -u nobody -- cat "$EASYRSA_DIR/pki/crl.pem" >/dev/null \
+  && echo "✅ nobody can read crl.pem" \
+  || echo "❌ nobody CANNOT read crl.pem"
+
 echo "✅ Found required .NET files"
 cd /app
 
