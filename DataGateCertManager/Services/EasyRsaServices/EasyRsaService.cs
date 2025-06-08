@@ -338,6 +338,24 @@ public class EasyRsaService(
         }
 
         _logger.LogInformation("CRL successfully generated at: {CrlPath}", crlPath);
+        
+        try
+        {
+            File.SetAttributes(crlPath, FileAttributes.Normal);
+            var chmodCommand = $"chmod 644 \"{crlPath}\" && chmod o+rx \"{Path.GetDirectoryName(crlPath)}\"";
+            var (_, chmodExit) = await easyRsaExecCommandService.RunCommandAsync(
+                chmodCommand,
+                new Dictionary<string, string>(),
+                cancellationToken,
+                easyRsaPath);
+
+            if (chmodExit != 0)
+                _logger.LogWarning("❗ chmod crl.pem failed after gen-crl. OpenVPN might not be able to read it.");
+        }
+        catch (Exception chmodEx)
+        {
+            _logger.LogWarning("❗ Failed to set permissions for crl.pem: {Message}", chmodEx.Message);
+        }
         return true;
     }
 
