@@ -176,6 +176,15 @@ chmod 644 "$EASYRSA_DIR/pki/crl.pem"
 echo "===== Setting permissions for $DATA_DIR recursively... ====="
 chmod -R a+rX "$DATA_DIR"
 
+echo "===== Fixing permissions to allow OpenVPN (user: nobody) read crl.pem ====="
+
+chmod 644 "$EASYRSA_DIR/pki/crl.pem" || echo "❌ Failed to chmod crl.pem"
+chmod o+rx "$DATA_DIR" || echo "❌ Failed to chmod $DATA_DIR"
+chmod o+rx "$EASYRSA_DIR" || echo "❌ Failed to chmod $EASYRSA_DIR"
+chmod o+rx "$EASYRSA_DIR/pki" || echo "❌ Failed to chmod $EASYRSA_DIR/pki"
+
+echo "✅ crl.pem permission fix complete"
+
 echo "===== FINAL CHECK BEFORE STARTING OPENVPN ====="
 ls -l "$DATA_DIR"
 [ -d "$EASYRSA_DIR/pki" ] && ls -l "$EASYRSA_DIR/pki"
