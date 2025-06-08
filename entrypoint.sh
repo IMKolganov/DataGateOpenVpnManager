@@ -48,6 +48,8 @@ if [ ! -d "$EASYRSA_DIR/pki" ]; then
     ./easyrsa --batch build-ca nopass
     ./easyrsa --batch gen-req server nopass
     ./easyrsa --batch sign-req server server
+    
+    unset EASYRSA_REQ_CN
 fi
 
 # Ensure ta.key exists
