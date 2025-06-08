@@ -20,7 +20,24 @@ iptables -A FORWARD -i tun0 -j ACCEPT
 iptables -A FORWARD -o tun0 -j ACCEPT
 iptables -t nat -A POSTROUTING -s 10.51.28.0/24 -o eth0 -j MASQUERADE
 
-echo "===== Checking contents of $DATA_DIR before starting..."
+echo "===== Copying and configuring OpenVPN hook scripts from $SCRIPT_SOURCE to /etc/openvpn/scripts ====="
+mkdir -p /etc/openvpn/scripts
+
+for SCRIPT in client-connect.sh client-disconnect.sh learn-address.sh tls-verify.sh log-watcher.sh; do
+  SOURCE_PATH="$SCRIPT_SOURCE/$SCRIPT"
+  TARGET_PATH="/etc/openvpn/scripts/$SCRIPT"
+
+  if [ -f "$SOURCE_PATH" ]; then
+    echo "🔧 Replacing __API_PORT__ in $SCRIPT with $API_PORT"
+    sed "s|__API_PORT__|${API_PORT}|g" "$SOURCE_PATH" > "$TARGET_PATH"
+    chmod +x "$TARGET_PATH"
+    echo "✅ Copied and made executable: $SCRIPT"
+  else
+    echo "⚠️ WARNING: $SCRIPT not found in $SCRIPT_SOURCE"
+  fi
+done
+
+echo "===== Checking contents of $DATA_DIR before starting... ====="
 ls -l "$DATA_DIR"
 
 if [ ! -x "$EASYRSA_DIR/easyrsa" ]; then
@@ -61,7 +78,7 @@ else
 fi
 
 # Ensure all required files are in /etc/openvpn
-echo "===== Copying necessary certs and keys to /etc/openvpn..."
+echo "===== Copying necessary certs and keys to /etc/openvpn... ====="
 declare -A FILES_TO_COPY=(
   ["$EASYRSA_DIR/pki/ca.crt"]="/etc/openvpn/ca.crt"
   ["$EASYRSA_DIR/pki/issued/server.crt"]="/etc/openvpn/server.crt"
@@ -127,12 +144,18 @@ syslog
 
 management 127.0.0.1 $OpenVpnManagement__Port
 
+script-security 2
+client-connect /etc/openvpn/scripts/client-connect.sh
+client-disconnect /etc/openvpn/scripts/client-disconnect.sh
+learn-address /etc/openvpn/scripts/learn-address.sh
+tls-verify /etc/openvpn/scripts/tls-verify.sh
+
 verb 4
 EOF
 fi
 
 # Prepare log files
-echo "Clearing logs..."
+echo "===== Clearing logs... ====="
 truncate -s 0 "$DATA_DIR/openvpn.log" || touch "$DATA_DIR/openvpn.log"
 truncate -s 0 "$DATA_DIR/openvpn-status.log" || touch "$DATA_DIR/openvpn-status.log"
 chmod 777 "$DATA_DIR/openvpn.log" "$DATA_DIR/openvpn-status.log"
@@ -149,7 +172,7 @@ fi
 chmod 644 "$EASYRSA_DIR/pki/crl.pem"
 
 # Add read/execute permissions to everything inside DATA_DIR
-echo "Setting permissions for $DATA_DIR recursively..."
+echo "===== Setting permissions for $DATA_DIR recursively... ====="
 chmod -R a+rX "$DATA_DIR"
 
 echo "===== FINAL CHECK BEFORE STARTING OPENVPN ====="
