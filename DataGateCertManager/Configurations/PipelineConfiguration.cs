@@ -50,5 +50,6 @@ public static class PipelineConfiguration
         
         //SignalR
         app.MapHub<OpenVpnSignalHub>("/hubs/openvpn");
+        app.MapHub<OpenVpnEventHub>("/hubs/openvpn-event");
     }
 }

@@ -15,12 +15,17 @@ public class OvpnFileController(
     : ControllerBase
 {
     [HttpPost("AddOvpnFile")]
-    public async Task<ActionResult<OvpnFileMetadata>> AddOvpnFile([FromBody] AddOvpnFileRequest request,
+    public async Task<ActionResult<OvpnFileMetadata>> AddOvpnFile([FromBody] GenerateOvpnFileRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
             var mainPath = easyRsaPathResolver.GetEasyRsaPath();
+
+            if (string.IsNullOrEmpty(request.CommonName) || string.IsNullOrEmpty(request.ConfigTemplate))//todo: fix
+            {
+                throw new NullReferenceException("Common name and config template are required");
+            }
 
             var result = await ovpnFileService.AddOvpnFile(
                 mainPath,

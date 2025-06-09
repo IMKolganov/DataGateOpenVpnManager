@@ -338,7 +338,29 @@ public class EasyRsaService(
         }
 
         _logger.LogInformation("CRL successfully generated at: {CrlPath}", crlPath);
+        await SetCrlPermissionsAsync(easyRsaPath, crlPath, cancellationToken);
         return true;
+    }
+    
+    private async Task SetCrlPermissionsAsync(string easyRsaPath, string crlPath, CancellationToken cancellationToken,
+        bool throwIfFail = true)
+    {
+        File.SetAttributes(crlPath, FileAttributes.Normal);
+
+        var chmodCommand = $"chmod 644 \"{crlPath}\" && chmod o+rx \"{Path.GetDirectoryName(crlPath)}\"";
+        var (_, chmodExit) = await easyRsaExecCommandService.RunCommandAsync(
+            chmodCommand,
+            new Dictionary<string, string>(),
+            cancellationToken,
+            easyRsaPath);
+
+        if (chmodExit != 0)
+        {
+            if (throwIfFail)
+                throw new Exception("Failed to set correct permissions on crl.pem. OpenVPN might not be able to read it.");
+            else
+                _logger.LogWarning("⚠️ Failed to chmod crl.pem, OpenVPN might not be able to read it.");
+        }
     }
 
     private async Task<ServerCertificate> MatchingCertsAsync(string easyRsaPath, string serialNumber, string commonName,

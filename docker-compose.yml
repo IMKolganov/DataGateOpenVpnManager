@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        TARGETARCH: "arm64"
+        TARGETARCH: "amd64"
         BUILD_CONFIGURATION: "Debug"
     container_name: openvpn-main-udp
     restart: unless-stopped

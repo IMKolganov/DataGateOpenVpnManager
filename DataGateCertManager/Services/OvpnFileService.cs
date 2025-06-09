@@ -33,7 +33,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             await  File.ReadAllTextAsync(taKeyPath ?? throw new InvalidOperationException("TaCertPath is null."),
                 cancellationToken);
         
-        logger.LogInformation("Step 3: Generating .ovpn file...");
+        logger.LogInformation("Step 3: Generating .ovpn file...");//todo:null or empty configTemplate
         var ovpnContent = GenerateOvpnFile(configTemplate, serverIp, serverPort, caCertContent, 
             clientCertContent, clientKeyContent, taKeyContent);
 
