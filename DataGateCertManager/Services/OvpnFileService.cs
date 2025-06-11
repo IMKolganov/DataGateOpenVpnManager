@@ -119,7 +119,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
     
     private string MoveRevokedOvpnFile(string ovpnFileName, string ovpnFilePath, string easyRsaPath)
     {
-        var revokedOvpnFilesDirPath = Path.Combine(easyRsaPath, "revoked");
+        var revokedOvpnFilesDirPath = Path.Combine(easyRsaPath, "pki", "revoked", "ovpn_files");
     
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         var uniqueFileName = 
