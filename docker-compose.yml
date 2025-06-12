@@ -1,11 +1,7 @@
 services:
   openvpn-main-udp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        TARGETARCH: "amd64"
-        BUILD_CONFIGURATION: "Debug"
+    image: imkolganov/openvpn-gate-monitor-openvpn:latest
+    pull_policy: always
     container_name: openvpn-main-udp
     restart: unless-stopped
     networks:
@@ -15,7 +11,7 @@ services:
     devices:
       - "/dev/net/tun:/dev/net/tun"
     volumes:
-      - openvpn_data_main_udp:/openvpn-main-udp
+      - ./data/openvpn_udp:/openvpn-udp
     ports:
       - "1295:1295/udp"
       - "5009:5009"
