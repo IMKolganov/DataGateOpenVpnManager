@@ -6,6 +6,12 @@ public class OpenVpnManagementSignalService(TelnetClient telnetClient, ILogger<C
     
     public async Task<string> SendCommandAsync(string command, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            commandQueueLogger.LogInformation($"[OpenVpnManagementSignalService] Command is null or empty: {command ?? "null"}");
+            return string.Empty;
+        }
+
         try
         {
             commandQueueLogger.LogInformation($"Sending command... command: {command}");
@@ -23,6 +29,15 @@ public class OpenVpnManagementSignalService(TelnetClient telnetClient, ILogger<C
         }
     }
 
-    public void Subscribe(IMessageSubscriber subscriber) => _commandQueue.Subscribe(subscriber);
-    public void Unsubscribe(IMessageSubscriber subscriber, string ip, int port) => _commandQueue.Unsubscribe(subscriber, ip, port);
+    public void Subscribe(IMessageSubscriber subscriber)
+    {
+        ArgumentNullException.ThrowIfNull(subscriber);
+        _commandQueue.Subscribe(subscriber);
+    }
+
+    public void Unsubscribe(IMessageSubscriber subscriber, string ip, int port)
+    {
+        ArgumentNullException.ThrowIfNull(subscriber);
+        _commandQueue.Unsubscribe(subscriber, ip, port);
+    }
 }

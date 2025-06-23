@@ -11,7 +11,21 @@ public class BashCommandRunner : IBashCommandRunner
         CancellationToken cancellationToken,
         string? workingDirectory = null)
     {
+        if (string.IsNullOrWhiteSpace(command))
+            throw new ArgumentException("Command cannot be null or whitespace.", nameof(command));
+
+        if (!string.IsNullOrWhiteSpace(workingDirectory) && !Directory.Exists(workingDirectory))
+            throw new DirectoryNotFoundException($"Working directory not found: {workingDirectory}");
+
         cancellationToken.ThrowIfCancellationRequested();
+        
+        // prepend environment variables as export statements
+        if (environmentVariables != null && environmentVariables.Count > 0)
+        {
+            var exportCommands = string.Join(" ", environmentVariables.Select(kvp =>
+                $"export {kvp.Key}='{kvp.Value}';"));
+            command = exportCommands + " " + command;
+        }
 
         var processInfo = new ProcessStartInfo("bash", $"-c \"{command} 2>&1\"")
         {
@@ -36,13 +50,7 @@ public class BashCommandRunner : IBashCommandRunner
         try
         {
             var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-
-            while (!process.HasExited)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await Task.Delay(50, cancellationToken);
-            }
-
+            await process.WaitForExitAsync(cancellationToken);
             return (output, process.ExitCode);
         }
         catch (Exception)
@@ -50,14 +58,12 @@ public class BashCommandRunner : IBashCommandRunner
             try
             {
                 if (!process.HasExited)
-                {
                     process.Kill(true);
-                }
             }
-            catch
-            {
+            catch {  
                 // ignore errors when trying to kill the process
             }
+
             throw;
         }
     }

@@ -18,7 +18,7 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
         _client is { Connected: true } &&
         _stream is { CanRead: true, CanWrite: true };
 
-    public async Task EnsureConnectedAsync(CancellationToken cancellationToken)
+    public virtual async Task EnsureConnectedAsync(CancellationToken cancellationToken)
     {
         await _connectionLock.WaitAsync(cancellationToken);
         try
@@ -112,7 +112,7 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
         }
     }
 
-    public async Task SendAsync(string command, CancellationToken cancellationToken)
+    public virtual async Task SendAsync(string command, CancellationToken cancellationToken)
     {
         if (!IsConnected)
         {
@@ -132,7 +132,7 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
         }
     }
 
-    public async Task DisconnectAsync()
+    public virtual async Task DisconnectAsync()
     {
         await _cancellationTokenSource.CancelAsync();
 
@@ -153,7 +153,13 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
         _stream = null;
         _client = null;
     }
-
+    
+    // Protected helper for testing
+    protected void RaiseOnDataReceived(string message)
+    {
+        OnDataReceived?.Invoke(message);
+    }
+    
     public async ValueTask DisposeAsync()
     {
         await DisconnectAsync();

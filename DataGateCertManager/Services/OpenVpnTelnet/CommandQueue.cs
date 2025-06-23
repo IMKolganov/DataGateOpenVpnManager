@@ -106,38 +106,48 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
     {
         if (_cts.IsCancellationRequested)
             throw new InvalidOperationException("[CommandQueue] Cannot send command — queue is disconnected.");
+        
+        cancellationToken.ThrowIfCancellationRequested();
 
-        try
-        {
-            await _telnetClient.EnsureConnectedAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CommandQueue] Failed to reconnect before sending command.");
-            throw;
-        }
+        await _telnetClient.EnsureConnectedAsync(cancellationToken);
 
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pendingCommand = new PendingCommand(command, tcs);
 
-        await using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
-
         _pendingCommands.Enqueue(pendingCommand);
-        await _telnetClient.SendAsync(command, cancellationToken);
 
-        var timeoutTask = Task.Delay(timeoutMs, cancellationToken);
-        var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-
-        if (completedTask == tcs.Task)
+        try
         {
-            var result = await tcs.Task;
-            _logger.LogInformation("[CommandQueue] ✅ Received response for command: " +
-                                   "{Command} → {Result}", command, result);
-            return result;
-        }
+            await _telnetClient.SendAsync(command, cancellationToken);
 
-        _ = _pendingCommands.TryDequeue(out _);
-        throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");
+            var timeoutTask = Task.Delay(timeoutMs, cancellationToken);
+            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+
+            if (completedTask == tcs.Task)
+            {
+                var result = await tcs.Task; // can rethrow if tcs.Task faulted
+                _logger.LogInformation("[CommandQueue] ✅ Received response for command: {Command} → {Result}", command, result);
+                return result;
+            }
+            
+            if (_pendingCommands.TryDequeue(out var timedOutCommand) && timedOutCommand == pendingCommand)
+            {
+                tcs.TrySetCanceled();
+            }
+
+            throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CommandQueue] Exception in SendCommandAsync");
+
+            if (_pendingCommands.TryDequeue(out var erroredCommand) && erroredCommand == pendingCommand)
+            {
+                tcs.TrySetException(ex);
+            }
+
+            throw;
+        }
     }
 
 
