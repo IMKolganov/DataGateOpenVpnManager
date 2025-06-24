@@ -119,7 +119,7 @@ dh none
 tls-groups prime256v1
 
 topology subnet
-server 10.51.28.0 255.255.255.0
+server $VPN_SUBNET $VPN_NETMASK
 ifconfig-pool-persist /etc/openvpn/ipp.txt
 
 push "dhcp-option DNS $DNS1"
