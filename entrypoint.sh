@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+API_PORT=${API_PORT:-5010}
 PORT=${PORT:-1194}
 PROTO=${PROTO:-udp}
 OpenVpnManagement__Port=${OpenVpnManagement__Port:-5092}
@@ -12,6 +13,12 @@ VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_SOURCE="/scripts"
+
+# If API_PORT is set, export it as ASPNETCORE_HTTP_PORTS
+if [ -n "$API_PORT" ]; then
+  export ASPNETCORE_HTTP_PORTS="$API_PORT"
+  echo "[entrypoint] Set ASPNETCORE_HTTP_PORTS to $ASPNETCORE_HTTP_PORTS"
+fi
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
