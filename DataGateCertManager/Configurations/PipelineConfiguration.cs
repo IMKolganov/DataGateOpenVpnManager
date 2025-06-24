@@ -18,7 +18,6 @@ public static class PipelineConfiguration
             });
         }
 
-        app.UseHttpsRedirection();
         app.UseAuthorization();
         app.MapControllers();
         
