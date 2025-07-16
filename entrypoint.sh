@@ -203,6 +203,11 @@ echo "===== Starting OpenVPN in background..."
 openvpn --config "$DATA_DIR/server.conf" &
 OPENVPN_PID=$!
 
+# 👇 Added: stream OpenVPN logs to Docker stdout
+echo "===== Attaching OpenVPN log to stdout... ====="
+tail -F "$DATA_DIR/openvpn.log" &
+TAIL_PID=$!
+
 echo "[entrypoint] Starting .NET application..."
 
 # Wait for .NET files
@@ -232,11 +237,15 @@ cd /app
 dotnet DataGateCertManager.dll &
 DOTNET_PID=$!
 
+# Wait for OpenVPN and .NET
 wait $OPENVPN_PID
 OPENVPN_EXIT_CODE=$?
 
 wait $DOTNET_PID
 DOTNET_EXIT_CODE=$?
+
+# Kill tail (optional, for clean shutdown)
+kill $TAIL_PID 2>/dev/null || true
 
 if [ $OPENVPN_EXIT_CODE -ne 0 ]; then
   echo "OpenVPN exited with code $OPENVPN_EXIT_CODE"
