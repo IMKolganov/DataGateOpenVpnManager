@@ -14,6 +14,11 @@ builder.Services.ConfigureSignalR(builder.Configuration);
 builder.ConfigureWebHost();
 
 var app = builder.Build();
+builder.Host.UseDefaultServiceProvider(options =>
+{
+    options.ValidateScopes = true;
+    options.ValidateOnBuild = true;
+});
 
 app.ConfigureMiddleware();
 app.ConfigurePipeline();
