@@ -7,7 +7,8 @@ namespace DataGateCertManager.Services;
 public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService easyRsaService)
     : IOvpnFileService
 {
-    public async Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
+    public async Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string friendlyΝame,
+        string configTemplate, 
         string serverIp, int serverPort, CancellationToken cancellationToken, 
         string issuedTo = "openVpnClient", int certExpireDays = 365)
     {
@@ -34,7 +35,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
                 cancellationToken);
         
         logger.LogInformation("Step 3: Generating .ovpn file...");//todo:null or empty configTemplate
-        var ovpnContent = GenerateOvpnFile(configTemplate, serverIp, serverPort, caCertContent, 
+        var ovpnContent = GenerateOvpnFile(configTemplate, friendlyΝame,serverIp, serverPort, caCertContent, 
             clientCertContent, clientKeyContent, taKeyContent);
 
         logger.LogInformation("Step 4: Writing .ovpn file...");
@@ -156,6 +157,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
     
     private static string GenerateOvpnFile(
         string configTemplate,
+        string friendlyΝame,
         string serverIp,
         int serverPort,
         string caCert,
@@ -177,6 +179,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
             throw new ArgumentNullException(nameof(tlsAuthKey));
 
         return configTemplate
+            .Replace("{{friendly_name}}", friendlyΝame)
             .Replace("{{server_ip}}", serverIp)
             .Replace("{{server_port}}", serverPort.ToString())
             .Replace("{{ca_cert}}", caCert)

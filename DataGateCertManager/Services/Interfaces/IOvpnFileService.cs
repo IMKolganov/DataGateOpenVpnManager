@@ -5,7 +5,7 @@ namespace DataGateCertManager.Services.Interfaces;
 
 public interface IOvpnFileService
 {
-    Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string configTemplate, 
+    Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string friendlyΝame,string configTemplate, 
         string serverIp, int serverPort, CancellationToken cancellationToken, 
         string issuedTo = "openVpnClient", int certExpireDays = 365);
 

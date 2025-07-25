@@ -30,6 +30,7 @@ public class OvpnFileController(
             var result = await ovpnFileService.AddOvpnFile(
                 mainPath,
                 request.CommonName,
+                request.FriendlyΝame,
                 request.ConfigTemplate,
                 request.ServerIp,
                 request.ServerPort,
