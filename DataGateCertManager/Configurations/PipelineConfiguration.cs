@@ -37,12 +37,21 @@ public static class PipelineConfiguration
             description = "This service manages OpenVPN certificates and provides a JSON API for operations like create/revoke.",
             config = new
             {
+                dns1 = config["DNS1"],
+                dns2 = config["DNS2"],
+                vpnSubnet = config["VPN_SUBNET"],
+                vpnNetmask = config["VPN_NETMASK"],
                 easyRsaPath = config["EASY_RSA_PATH"],
                 dataDir = config["DATA_DIR"],
                 port = config["PORT"],
                 apiPort = config["API_PORT"],
                 proto = config["PROTO"],
-                mgmtPort = config["MGMT_PORT"]
+                openVpnManagement = new
+                {
+                    host = config["OpenVpnManagement:Host"],
+                    port = config["OpenVpnManagement:Port"]
+                },
+                backendBaseUrl = config["BACKEND__BASEURL"]
             }
         }));
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
