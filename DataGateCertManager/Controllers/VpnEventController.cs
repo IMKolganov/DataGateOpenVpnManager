@@ -15,32 +15,64 @@ public class VpnEventController(
     [HttpPost("connect")]
     public async Task<IActionResult> OnClientConnect([FromBody] VpnEventData data)
     {
-        Console.WriteLine($"Client connected: {data.CommonName}, IP: {data.RealAddress}");
-        await hubContext.Clients.All.SendAsync("ClientConnected", data);
+        logger.LogInformation("Received connect event: CN={CommonName}, IP={RealAddress}", data.CommonName, data.RealAddress);
+        try
+        {
+            await hubContext.Clients.All.SendAsync("ClientConnected", data);
+            logger.LogInformation("Broadcast 'ClientConnected' completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Broadcast 'ClientConnected' failed.");
+        }
         return Ok();
     }
 
     [HttpPost("disconnect")]
     public async Task<IActionResult> OnClientDisconnect([FromBody] VpnEventData data)
     {
-        Console.WriteLine($"Client disconnected: {data.CommonName}, Duration: {data.ConnectedSince}");
-        await hubContext.Clients.All.SendAsync("ClientDisconnected", data);
+        logger.LogInformation("Received disconnect event: CN={CommonName}, Duration={ConnectedSince}", data.CommonName, data.ConnectedSince);
+        try
+        {
+            await hubContext.Clients.All.SendAsync("ClientDisconnected", data);
+            logger.LogInformation("Broadcast 'ClientDisconnected' completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Broadcast 'ClientDisconnected' failed.");
+        }
         return Ok();
     }
 
     [HttpPost("attempt")]
     public async Task<IActionResult> OnClientAttempt([FromBody] VpnEventData data)
     {
-        Console.WriteLine($"Client attempt: {data.CommonName} @ {data.VirtualAddress}");
-        await hubContext.Clients.All.SendAsync("ClientAttempted", data);
+        logger.LogInformation("Received attempt event: CN={CommonName}, VirtualAddress={VirtualAddress}", data.CommonName, data.VirtualAddress);
+        try
+        {
+            await hubContext.Clients.All.SendAsync("ClientAttempted", data);
+            logger.LogInformation("Broadcast 'ClientAttempted' completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Broadcast 'ClientAttempted' failed.");
+        }
         return Ok();
     }
 
     [HttpPost("tlsverify")]
     public async Task<IActionResult> OnTlsVerify([FromBody] VpnEventData data)
     {
-        logger.LogInformation("TLS verified CN: {CommonName}, Depth: {Message}", data.CommonName, data.Message);
-        await hubContext.Clients.All.SendAsync("TlsVerified", data);
+        logger.LogInformation("TLS verified: CN={CommonName}, Message={Message}", data.CommonName, data.Message);
+        try
+        {
+            await hubContext.Clients.All.SendAsync("TlsVerified", data);
+            logger.LogInformation("Broadcast 'TlsVerified' completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Broadcast 'TlsVerified' failed.");
+        }
         return Ok();
     }
 }
