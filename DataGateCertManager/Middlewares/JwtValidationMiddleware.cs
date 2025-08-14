@@ -15,7 +15,8 @@ public class JwtValidationMiddleware(RequestDelegate next)
         "/api/vpnEvent/connect",
         "/api/vpnEvent/disconnect",
         "/api/vpnEvent/tlsverify",
-        "/api/vpnEvent/attempt"
+        "/api/vpnEvent/attempt",
+        "/api/vpnEvent/envdump"
     };
 
     public async Task Invoke(HttpContext context, IMicroserviceJwtValidator validator)
