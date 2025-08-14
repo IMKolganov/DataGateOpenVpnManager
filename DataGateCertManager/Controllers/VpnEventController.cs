@@ -83,18 +83,16 @@ public class VpnEventController(
             "Received env dump from hook '{Hook}' at {Timestamp}. Args={ArgsCount}, Env length={EnvLength}",
             data.Hook, data.Timestamp, data.Args?.Count ?? 0, data.EnvB64?.Length ?? 0);
 
-        if (!string.IsNullOrEmpty(data.EnvB64))
+        if (!string.IsNullOrWhiteSpace(data.EnvB64))
         {
             try
             {
-                var envBytes = Convert.FromBase64String(data.EnvB64);
-                var envText = System.Text.Encoding.UTF8.GetString(envBytes);
-
-                logger.LogDebug("Decoded environment:\n{EnvText}", envText);
+                var envText = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(data.EnvB64));
+                logger.LogInformation("Decoded environment for {Hook}:\n{Env}", data.Hook, envText);
             }
-            catch (FormatException ex)
+            catch (Exception ex)
             {
-                logger.LogWarning(ex, "Invalid base64 in EnvB64");
+                logger.LogWarning(ex, "Failed to decode EnvB64 for hook {Hook}", data.Hook);
             }
         }
 
