@@ -76,6 +76,22 @@ public class VpnEventController(
         return Ok();
     }
     
+    [HttpPost("authfail")]
+    public async Task<IActionResult> OnAuthFailed([FromBody] VpnEventData data)
+    {
+        logger.LogInformation("Auth failed: CN={CommonName}, Message={Message}", data.CommonName, data.Message);
+        try
+        {
+            await hubContext.Clients.All.SendAsync("AuthFailed", data);
+            logger.LogInformation("Broadcast 'AuthFailed' completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Broadcast 'AuthFailed' failed.");
+        }
+        return Ok();
+    }
+    
     [HttpPost("envdump")]
     public async Task<IActionResult> EnvDump([FromBody] VpnEnvDump data)
     {
