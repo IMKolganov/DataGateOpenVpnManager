@@ -6,49 +6,61 @@
 # - $untrusted_ip:$untrusted_port: the real IP/port of the client
 # - $ifconfig_pool_local: the assigned VPN IP address
 
+# OpenVPN hook: client-connect
+
 set -eu
 
-# Helpers
-json_post_bg() {
-  # $1: endpoint path, $2: json payload
-  (curl -sS --max-time 2 -H "Content-Type: application/json" -X POST "http://localhost:__API_PORT__/$1" -d "$2" >/dev/null 2>&1) &
+API_BASE="http://127.0.0.1:${API_PORT:-5010}"
+
+sanitize() {
+  printf "%s" "${1:-}" | tr '\n' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
-b64_env() {
-  # BusyBox base64 has no -w; GNU has -w0. Try GNU first, fallback to BusyBox.
-  if base64 --help 2>/dev/null | grep -q -- "--wrap"; then
-    env | base64 -w0
+# time_unix is "session start" (seconds since epoch)
+unix_to_iso() {
+  # Prefer date -d @.. (GNU/BusyBox new); fallback to time_ascii -> ISO
+  if date -u -d "@$1" +"%Y-%m-%dT%H:%M:%SZ" >/dev/null 2>&1; then
+    date -u -d "@$1" +"%Y-%m-%dT%H:%M:%SZ"
   else
-    env | base64
+    # time_ascii like "2025-08-14 12:52:29"
+    printf "%sZ" "$(printf "%s" "${time_ascii:-}" | sed 's/ /T/')"
   fi
 }
 
-iso_now() {
-  date -u +"%Y-%m-%dT%H:%M:%SZ"
-}
+CN="$(sanitize "${common_name:-}")"
+REAL_ADDR="$(sanitize "${untrusted_ip:-}:${untrusted_port:-}")"
+VIRT_IP="$(sanitize "${ifconfig_pool_remote_ip:-}")"
+SCRIPT_TYPE="$(sanitize "${script_type:-client-connect}")"
+IV_VER_S="$(sanitize "${IV_VER:-}")"
+IV_GUI_VER_S="$(sanitize "${IV_GUI_VER:-}")"
+IV_PLAT_S="$(sanitize "${IV_PLAT:-}")"
 
-# Prefer the actual client virtual IP in subnet topology
-virtual_ip="${ifconfig_pool_remote_ip:-${ifconfig_pool_local:-}}"
+CS_ISO=""
+if [ -n "${time_unix:-}" ]; then
+  CS_ISO="$(unix_to_iso "${time_unix}")"
+fi
 
-# Send main event
-json_post_bg "api/vpnEvent/connect" "$(cat <<JSON
+post_bg() {
+  (
+    curl -sS --max-time 2 -H "Content-Type: application/json" \
+      -X POST "$API_BASE/api/vpnEvent/connect" \
+      -d "$(cat <<JSON
 {
-  "CommonName": "${common_name:-}",
-  "RealAddress": "${untrusted_ip:-}:${untrusted_port:-}",
-  "VirtualAddress": "${virtual_ip:-}",
-  "Timestamp": "$(iso_now)"
+  "VpnServerId": ${VPN_SERVER_ID:-0},
+  "EventType": "ClientConnect",
+  "ScriptType": "$SCRIPT_TYPE",
+  "CommonName": "$CN",
+  "RealAddress": "$REAL_ADDR",
+  "VirtualAddress": "$VIRT_IP",
+  "ConnectedSince": "${CS_ISO}",
+  "IvVer": "$IV_VER_S",
+  "IvGuiVer": "$IV_GUI_VER_S",
+  "IvPlat": "$IV_PLAT_S"
 }
 JSON
-)"
-
-# Send environment dump
-json_post_bg "api/vpnEvent/envdump" "$(cat <<JSON
-{
-  "Hook": "client-connect",
-  "Timestamp": "$(iso_now)",
-  "Args": [],
-  "EnvB64": "$(b64_env)"
+)" >/dev/null 2>&1
+  ) &
 }
-JSON
-)"
 
+post_bg
+exit 0

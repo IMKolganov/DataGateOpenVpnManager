@@ -4,44 +4,33 @@
 # It receives the certificate depth and common name (CN) of the client being verified.
 # The script sends this information to the backend API for logging or auditing purposes.
 
+# OpenVPN hook: tls-verify
+
 set -eu
 
-depth="${1:-}"
-cn="${2:-}"
+API_BASE="http://127.0.0.1:${API_PORT:-5010}"
+
+# JSON-safe sanitizer
+sanitize() {
+  printf "%s" "${1:-}" | tr '\n' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# Try to get CN from tls_id_0 or X509_0_CN
+CN="${tls_id_0#CN=}"
+[ -n "${X509_0_CN:-}" ] && CN="${X509_0_CN}"
+
+REAL_ADDR="$(sanitize "${untrusted_ip:-}:${untrusted_port:-}")"
+COMMON_NAME="$(sanitize "${CN:-}")"
+SCRIPT_TYPE="$(sanitize "${script_type:-tls-verify}")"
+MSG="$(sanitize "tls-verify ok")"
 
 post_bg() {
-  (curl -sS --max-time 2 -H "Content-Type: application/json" -X POST "http://localhost:__API_PORT__/$1" -d "$2" >/dev/null 2>&1) &
+  (
+    curl -sS --max-time 2 -H "Content-Type: application/json" \
+      -X POST "$API_BASE/api/vpnEvent/tlsverify" \
+      -d "{\"VpnServerId\":${VPN_SERVER_ID:-0},\"EventType\":\"TlsVerified\",\"ScriptType\":\"$SCRIPT_TYPE\",\"CommonName\":\"$COMMON_NAME\",\"RealAddress\":\"$REAL_ADDR\",\"Message\":\"$MSG\"}" >/dev/null 2>&1
+  ) &
 }
 
-b64_env() {
-  if base64 --help 2>/dev/null | grep -q -- "--wrap"; then
-    env | base64 -w0
-  else
-    env | base64
-  fi
-}
-
-iso_now() {
-  date -u +"%Y-%m-%dT%H:%M:%SZ"
-}
-
-post_bg "api/vpnEvent/tlsverify" "$(cat <<JSON
-{
-  "CommonName": "$cn",
-  "Depth": "$depth",
-  "Timestamp": "$(iso_now)"
-}
-JSON
-)"
-
-post_bg "api/vpnEvent/envdump" "$(cat <<JSON
-{
-  "Hook": "tls-verify",
-  "Timestamp": "$(iso_now)",
-  "Args": ["$depth","$cn"],
-  "EnvB64": "$(b64_env)"
-}
-JSON
-)"
-
+post_bg
 exit 0
