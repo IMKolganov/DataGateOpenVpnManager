@@ -83,9 +83,23 @@ public class VpnEventController(
             "Received env dump from hook '{Hook}' at {Timestamp}. Args={ArgsCount}, Env length={EnvLength}",
             data.Hook, data.Timestamp, data.Args?.Count ?? 0, data.EnvB64?.Length ?? 0);
 
+        if (!string.IsNullOrEmpty(data.EnvB64))
+        {
+            try
+            {
+                var envBytes = Convert.FromBase64String(data.EnvB64);
+                var envText = System.Text.Encoding.UTF8.GetString(envBytes);
+
+                logger.LogDebug("Decoded environment:\n{EnvText}", envText);
+            }
+            catch (FormatException ex)
+            {
+                logger.LogWarning(ex, "Invalid base64 in EnvB64");
+            }
+        }
+
         try
         {
-            // Broadcast to all connected SignalR clients
             await hubContext.Clients.All.SendAsync("EnvDumpReceived", data);
             logger.LogInformation("Broadcast 'EnvDumpReceived' completed successfully.");
         }
