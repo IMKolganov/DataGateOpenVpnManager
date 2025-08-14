@@ -9,14 +9,15 @@
 
 set -eu
 
-# Helpers
 json_post_bg() {
-  # $1: endpoint path, $2: json payload
-  (curl -sS --max-time 2 -H "Content-Type: application/json" -X POST "http://localhost:__API_PORT__/$1" -d "$2" >/dev/null 2>&1) &
+  (curl -sS --max-time 2 -H "Content-Type: application/json" -X POST "http://localhost:__API_PORT__/api/vpnEvent/disconnect" -d "$1" >/dev/null 2>&1) &
+}
+
+json_post_envdump() {
+  (curl -sS --max-time 2 -H "Content-Type: application/json" -X POST "http://localhost:__API_PORT__/api/vpnEvent/envdump" -d "$1" >/dev/null 2>&1) &
 }
 
 b64_env() {
-  # BusyBox base64 has no -w; GNU has -w0. Try GNU first, fallback to BusyBox.
   if base64 --help 2>/dev/null | grep -q -- "--wrap"; then
     env | base64 -w0
   else
@@ -28,24 +29,21 @@ iso_now() {
   date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
-# Prefer the actual client virtual IP in subnet topology
 virtual_ip="${ifconfig_pool_remote_ip:-${ifconfig_pool_local:-}}"
 
-# Send main event
-json_post_bg "api/vpnEvent/connect" "$(cat <<JSON
+json_post_bg "$(cat <<JSON
 {
   "CommonName": "${common_name:-}",
   "RealAddress": "${untrusted_ip:-}:${untrusted_port:-}",
   "VirtualAddress": "${virtual_ip:-}",
-  "Timestamp": "$(iso_now)"
+  "DisconnectedAt": "$(iso_now)"
 }
 JSON
 )"
 
-# Send environment dump
-json_post_bg "api/vpnEvent/envdump" "$(cat <<JSON
+json_post_envdump "$(cat <<JSON
 {
-  "Hook": "client-connect",
+  "Hook": "client-disconnect",
   "Timestamp": "$(iso_now)",
   "Args": [],
   "EnvB64": "$(b64_env)"
