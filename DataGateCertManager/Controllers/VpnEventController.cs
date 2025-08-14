@@ -75,4 +75,25 @@ public class VpnEventController(
         }
         return Ok();
     }
+    
+    [HttpPost("envdump")]
+    public async Task<IActionResult> EnvDump([FromBody] VpnEnvDump data)
+    {
+        logger.LogInformation(
+            "Received env dump from hook '{Hook}' at {Timestamp}. Args={ArgsCount}, Env length={EnvLength}",
+            data.Hook, data.Timestamp, data.Args?.Count ?? 0, data.EnvB64?.Length ?? 0);
+
+        try
+        {
+            // Broadcast to all connected SignalR clients
+            await hubContext.Clients.All.SendAsync("EnvDumpReceived", data);
+            logger.LogInformation("Broadcast 'EnvDumpReceived' completed successfully.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Broadcast 'EnvDumpReceived' failed.");
+        }
+
+        return Ok();
+    }
 }
