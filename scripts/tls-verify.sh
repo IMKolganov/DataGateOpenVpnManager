@@ -6,31 +6,50 @@
 
 # OpenVPN hook: tls-verify
 
-set -eu
+set -e  # no -u !
 
 API_BASE="http://127.0.0.1:${API_PORT:-5010}"
 
-# JSON-safe sanitizer
-sanitize() {
-  printf "%s" "${1:-}" | tr '\n' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
-}
-
-# Try to get CN from tls_id_0 or X509_0_CN
-CN="${tls_id_0#CN=}"
-[ -n "${X509_0_CN:-}" ] && CN="${X509_0_CN}"
-
-REAL_ADDR="$(sanitize "${untrusted_ip:-}:${untrusted_port:-}")"
-COMMON_NAME="$(sanitize "${CN:-}")"
-SCRIPT_TYPE="$(sanitize "${script_type:-tls-verify}")"
-MSG="$(sanitize "tls-verify ok")"
+depth="${1:-}"          # tls-verify depth (0 = peer cert)
+subject="${2:-}"        # full subject, if provided
 
 post_bg() {
   (
     curl -sS --max-time 2 -H "Content-Type: application/json" \
-      -X POST "$API_BASE/api/vpnEvent/tlsverify" \
-      -d "{\"VpnServerId\":${VPN_SERVER_ID:-0},\"EventType\":\"TlsVerified\",\"ScriptType\":\"$SCRIPT_TYPE\",\"CommonName\":\"$COMMON_NAME\",\"RealAddress\":\"$REAL_ADDR\",\"Message\":\"$MSG\"}" >/dev/null 2>&1
+      -X POST "$API_BASE/api/vpnEvent/tlsverify" -d "$1" >/dev/null 2>&1
   ) &
 }
 
-post_bg
+sanitize() {
+  printf "%s" "${1:-}" | tr '\n' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# On depth != 0 do nothing but allow handshake
+if [ "${depth:-}" != "0" ]; then
+  exit 0
+fi
+
+# Extract CN safely (try env first, then parse)
+cn="${X509_0_CN:-}"
+[ -z "$cn" ] && cn="${tls_id_0#CN=}"
+if [ -z "$cn" ] && [ -n "$subject" ]; then
+  # subject like: /CN=client1/...
+  cn="$(printf "%s" "$subject" | sed -n 's#.*/CN=\([^/]*\).*#\1#p')"
+fi
+
+real_addr="$(sanitize "${untrusted_ip:-}:${untrusted_port:-}")"
+cn_s="$(sanitize "$cn")"
+
+# Send event (non-blocking, even if CN empty — это просто телеметрия)
+post_bg "$(cat <<JSON
+{
+  "VpnServerId": ${VPN_SERVER_ID:-0},
+  "EventType": "TlsVerified",
+  "ScriptType": "tls-verify",
+  "CommonName": "$cn_s",
+  "RealAddress": "$real_addr"
+}
+JSON
+)"
+
 exit 0
