@@ -43,7 +43,6 @@ cn_s="$(sanitize "$cn")"
 # Send event (non-blocking, even if CN empty — это просто телеметрия)
 post_bg "$(cat <<JSON
 {
-  "VpnServerId": ${VPN_SERVER_ID:-0},
   "EventType": "TlsVerified",
   "ScriptType": "tls-verify",
   "CommonName": "$cn_s",

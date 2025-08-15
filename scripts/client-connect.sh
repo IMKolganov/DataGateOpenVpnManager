@@ -46,7 +46,6 @@ post_bg() {
       -X POST "$API_BASE/api/vpnEvent/connect" \
       -d "$(cat <<JSON
 {
-  "VpnServerId": ${VPN_SERVER_ID:-0},
   "EventType": "ClientConnect",
   "ScriptType": "$SCRIPT_TYPE",
   "CommonName": "$CN",

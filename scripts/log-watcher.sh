@@ -89,7 +89,6 @@ tail -n0 "$TAIL_OPT" "$LOG_FILE" | while IFS= read -r line; do
 
   payload="$(cat <<JSON
 {
-  "VpnServerId": ${VPN_SERVER_ID},
   "EventType": "${et}",
   "ScriptType": "log-watcher",
   "CommonName": "$(sanitize "$cn")",

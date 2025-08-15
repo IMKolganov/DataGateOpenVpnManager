@@ -1,7 +1,7 @@
 ﻿using DataGateCertManager.Hubs;
-using DataGateCertManager.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using OpenVPNGateMonitor.SharedModels.DataGateCertManager.VpnEvent.Requests;
 
 namespace DataGateCertManager.Controllers;
 

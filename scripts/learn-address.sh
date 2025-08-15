@@ -46,7 +46,6 @@ post_bg() {
       -X POST "$API_BASE/api/vpnEvent/attempt" \
       -d "$(cat <<JSON
 {
-  "VpnServerId": ${VPN_SERVER_ID:-0},
   "EventType": "LearnAdd",
   "ScriptType": "$SCRIPT_TYPE",
   "Action": "add",
