@@ -1,4 +1,5 @@
-﻿using DataGateCertManager.Models;
+﻿using DataGateCertManager.Hubs;
+using DataGateCertManager.Models;
 using DataGateCertManager.Services.OpenVpnTelnet;
 using Microsoft.Extensions.Options;
 
@@ -20,6 +21,7 @@ public static class SignalRConfiguration
         });
 
         services.AddSingleton<OpenVpnManagementSignalService>();
+        services.AddSingleton<HubConnectionTracker>(); 
         services.AddSignalR();
     }
 }

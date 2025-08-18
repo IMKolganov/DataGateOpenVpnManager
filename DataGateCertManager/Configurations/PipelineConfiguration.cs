@@ -22,7 +22,13 @@ public static class PipelineConfiguration
         app.MapControllers();
         
         app.UseStatusCodePagesWithReExecute("/error/{0}");
-        app.MapGet("/error/404", () => Results.Problem(statusCode: 404, title: "Page Not Found", 
+        app.MapGet("/error/401", () => Results.Problem(statusCode: 401, title: "Unauthorized",
+                detail: "Authentication is required and has failed or has not yet been provided."))
+            .ExcludeFromDescription();
+        app.MapGet("/error/403", () => Results.Problem(statusCode: 403, title: "Forbidden",
+                detail: "You do not have permission to access this resource."))
+            .ExcludeFromDescription();
+        app.MapGet("/error/404", () => Results.Problem(statusCode: 404, title: "Page Not Found",
                 detail: "The requested resource was not found."))
             .ExcludeFromDescription();
 
