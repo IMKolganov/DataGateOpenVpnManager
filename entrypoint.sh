@@ -163,7 +163,6 @@ tls-verify /etc/openvpn/scripts/tls-verify.sh
 
 verb 4
 EOF
-fi
 
 # Prepare log files
 echo "===== Clearing logs... ====="
