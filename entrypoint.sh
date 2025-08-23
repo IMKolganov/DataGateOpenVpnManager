@@ -10,6 +10,8 @@ DNS1=${DNS1:-8.8.8.8}
 DNS2=${DNS2:-8.8.4.4}
 VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
+TUN_IF="${TUN_IF:-tun0}"
+WAN_IF="${WAN_IF:-eth0}"
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_SOURCE="/scripts"
@@ -24,10 +26,12 @@ echo "===== STARTING OPENVPN CONTAINER ====="
 
 # Enable IP forwarding
 iptables -P FORWARD ACCEPT
-iptables -A FORWARD -i tun0 -j ACCEPT
-iptables -A FORWARD -o tun0 -j ACCEPT
-iptables -t nat -A POSTROUTING -s 10.51.28.0/24 -o eth0 -j MASQUERADE
+iptables -C FORWARD -i "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$TUN_IF" -j ACCEPT
+iptables -C FORWARD -o "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -o "$TUN_IF" -j ACCEPT
 
+iptables -t nat -C POSTROUTING -s "$VPN_SUBNET/$VPN_NETMASK" -o "$WAN_IF" -j MASQUERADE 2>/dev/null \
+  || iptables -t nat -A POSTROUTING -s "$VPN_SUBNET/$VPN_NETMASK" -o "$WAN_IF" -j MASQUERADE
+  
 echo "===== Copying and configuring OpenVPN hook scripts from $SCRIPT_SOURCE to /etc/openvpn/scripts ====="
 mkdir -p /etc/openvpn/scripts
 
