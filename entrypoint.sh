@@ -109,9 +109,8 @@ for SRC in "${!FILES_TO_COPY[@]}"; do
 done
 
 # Generate default server.conf if not present
-if [ ! -f "$DATA_DIR/server.conf" ]; then
-    echo "Generating default server.conf..."
-    cat <<EOF > "$DATA_DIR/server.conf"
+echo "Generating server.conf from environment..."
+cat <<EOF > "$DATA_DIR/server.conf"
 port $PORT
 proto $PROTO
 dev tun
