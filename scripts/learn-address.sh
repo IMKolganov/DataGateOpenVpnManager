@@ -13,7 +13,7 @@
 
 set -eu
 
-API_BASE="http://127.0.0.1:${API_PORT:-5010}"
+API_BASE="http://${API_HOST:-127.0.0.1}:${API_PORT:-5010}"
 
 action="${1:-}"
 address="${2:-}"

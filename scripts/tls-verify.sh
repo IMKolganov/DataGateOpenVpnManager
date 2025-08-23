@@ -8,7 +8,7 @@
 
 set -e  # no -u !
 
-API_BASE="http://127.0.0.1:${API_PORT:-5010}"
+API_BASE="http://${API_HOST:-127.0.0.1}:${API_PORT:-5010}"
 
 depth="${1:-}"          # tls-verify depth (0 = peer cert)
 subject="${2:-}"        # full subject, if provided
