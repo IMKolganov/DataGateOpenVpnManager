@@ -35,7 +35,6 @@ RUN apt-get update && \
     curl \
     nano \
     iptables \
-    procps \
     easy-rsa \
     openvpn \
     && rm -rf /var/lib/apt/lists/*

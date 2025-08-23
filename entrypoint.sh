@@ -26,7 +26,6 @@ fi
 echo "===== STARTING OPENVPN CONTAINER ====="
 
 # NAT/forward
-sysctl -w net.ipv4.ip_forward=1 >/dev/null
 iptables -P FORWARD ACCEPT
 iptables -C FORWARD -i "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$TUN_IF" -j ACCEPT
 iptables -C FORWARD -o "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -o "$TUN_IF" -j ACCEPT
