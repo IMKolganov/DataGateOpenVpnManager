@@ -16,6 +16,7 @@ services:
       - "1295:1295/udp"
       - "5009:5009"
     environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
       EASY_RSA_PATH: "/openvpn-main-udp/easy-rsa"
       DATA_DIR: /openvpn-main-udp
       PORT: "1295"
@@ -24,6 +25,10 @@ services:
       OpenVpnManagement__Port: "5095"
       OpenVpnManagement__Host: "localhost"
       BACKEND__BASEURL: "http://localhost:5581/"
+      WAN_IF: eth0
+      VPN_SUBNET: "10.50.28.0"
+      VPN_NETMASK: "255.255.255.0"
+
 
 networks:
   openvpn_network:

@@ -2,6 +2,7 @@
 set -e
 
 API_PORT=${API_PORT:-5010}
+API_HOST=${API_HOST:-127.0.0.1}
 PORT=${PORT:-1194}
 PROTO=${PROTO:-udp}
 OpenVpnManagement__Port=${OpenVpnManagement__Port:-5092}
@@ -10,11 +11,13 @@ DNS1=${DNS1:-8.8.8.8}
 DNS2=${DNS2:-8.8.4.4}
 VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
+TUN_IF="${TUN_IF:-tun0}"
+WAN_IF="${WAN_IF:-eth0}"
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_SOURCE="/scripts"
 
-# If API_PORT is set, export it as ASPNETCORE_HTTP_PORTS
+# .NET port
 if [ -n "$API_PORT" ]; then
   export ASPNETCORE_HTTP_PORTS="$API_PORT"
   echo "[entrypoint] Set ASPNETCORE_HTTP_PORTS to $ASPNETCORE_HTTP_PORTS"
@@ -22,26 +25,23 @@ fi
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
-# Enable IP forwarding
+# NAT/forward
 iptables -P FORWARD ACCEPT
-iptables -A FORWARD -i tun0 -j ACCEPT
-iptables -A FORWARD -o tun0 -j ACCEPT
-iptables -t nat -A POSTROUTING -s 10.51.28.0/24 -o eth0 -j MASQUERADE
+iptables -C FORWARD -i "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$TUN_IF" -j ACCEPT
+iptables -C FORWARD -o "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -o "$TUN_IF" -j ACCEPT
+iptables -t nat -C POSTROUTING -s "$VPN_SUBNET/$VPN_NETMASK" -o "$WAN_IF" -j MASQUERADE 2>/dev/null \
+  || iptables -t nat -A POSTROUTING -s "$VPN_SUBNET/$VPN_NETMASK" -o "$WAN_IF" -j MASQUERADE
 
-echo "===== Copying and configuring OpenVPN hook scripts from $SCRIPT_SOURCE to /etc/openvpn/scripts ====="
+echo "===== Copying OpenVPN hook scripts ====="
 mkdir -p /etc/openvpn/scripts
-
 for SCRIPT in client-connect.sh client-disconnect.sh learn-address.sh tls-verify.sh log-watcher.sh; do
-  SOURCE_PATH="$SCRIPT_SOURCE/$SCRIPT"
-  TARGET_PATH="/etc/openvpn/scripts/$SCRIPT"
-
-  if [ -f "$SOURCE_PATH" ]; then
-    echo "🔧 Replacing __API_PORT__ in $SCRIPT with $API_PORT"
-    sed "s|__API_PORT__|${API_PORT}|g" "$SOURCE_PATH" > "$TARGET_PATH"
-    chmod +x "$TARGET_PATH"
-    echo "✅ Copied and made executable: $SCRIPT"
+  SRC="$SCRIPT_SOURCE/$SCRIPT"; DST="/etc/openvpn/scripts/$SCRIPT"
+  if [ -f "$SRC" ]; then
+    cp -f "$SRC" "$DST"
+    chmod +x "$DST"
+    echo "✅ $SCRIPT copied"
   else
-    echo "⚠️ WARNING: $SCRIPT not found in $SCRIPT_SOURCE"
+    echo "⚠️ $SCRIPT not found in $SCRIPT_SOURCE"
   fi
 done
 
@@ -105,9 +105,8 @@ for SRC in "${!FILES_TO_COPY[@]}"; do
 done
 
 # Generate default server.conf if not present
-if [ ! -f "$DATA_DIR/server.conf" ]; then
-    echo "Generating default server.conf..."
-    cat <<EOF > "$DATA_DIR/server.conf"
+echo "Generating server.conf from environment..."
+cat <<EOF > "$DATA_DIR/server.conf"
 port $PORT
 proto $PROTO
 dev tun
@@ -153,6 +152,8 @@ syslog
 management 127.0.0.1 $OpenVpnManagement__Port
 
 script-security 2
+setenv API_PORT $API_PORT
+setenv API_HOST $API_HOST
 client-connect /etc/openvpn/scripts/client-connect.sh
 client-disconnect /etc/openvpn/scripts/client-disconnect.sh
 learn-address /etc/openvpn/scripts/learn-address.sh
@@ -160,7 +161,6 @@ tls-verify /etc/openvpn/scripts/tls-verify.sh
 
 verb 4
 EOF
-fi
 
 # Prepare log files
 echo "===== Clearing logs... ====="

@@ -11,7 +11,7 @@
 
 set -eu
 
-API_BASE="http://127.0.0.1:${API_PORT:-5010}"
+API_BASE="http://${API_HOST:-127.0.0.1}:${API_PORT:-5010}"
 
 sanitize() {
   printf "%s" "${1:-}" | tr '\n' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
