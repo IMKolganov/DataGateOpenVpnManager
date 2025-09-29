@@ -1,0 +1,79 @@
+# --- Core ---
+port ${PORT}
+proto ${PROTO}
+dev tun
+
+# --- PKI ---
+ca /etc/openvpn/ca.crt
+cert /etc/openvpn/server.crt
+key /etc/openvpn/server.key
+dh none
+tls-groups prime256v1
+
+# --- Network & routing ---
+topology subnet
+server ${VPN_SUBNET} ${VPN_NETMASK}
+ifconfig-pool-persist /etc/openvpn/ipp.txt
+
+push "dhcp-option DNS ${DNS1}"
+push "dhcp-option DNS ${DNS2}"
+push "block-outside-dns"
+${PUSH_REDIRECT}
+${EXTRA_ROUTES}
+${CLIENT_TO_CLIENT}
+
+# --- Keepalive ---
+keepalive ${KEEPALIVE}
+
+# --- TLS ---
+remote-cert-tls client
+tls-version-min ${TLS_MIN}
+tls-crypt /etc/openvpn/ta.key
+
+# --- Modern AEAD ciphers (required for DCO) ---
+data-ciphers ${NCP_LIST}
+data-ciphers-fallback ${NCP_FALLBACK}
+auth ${AUTH_ALG}
+;cipher AES-256-CBC  # legacy CBC disabled because DCO needs AEAD
+
+# --- DCO enabled by default ---
+${DCO_BLOCK}
+
+# --- Performance (buffers/MTU) ---
+${AUTOBUF_BLOCK}
+tun-mtu ${TUN_MTU}
+mssfix ${MSSFIX}
+
+# --- IPv6 (optional) ---
+${IPV6_BLOCK}
+
+# --- Service user ---
+user ${RUN_USER}
+group ${RUN_GROUP}
+persist-key
+persist-tun
+explicit-exit-notify 1
+
+# --- CRL & logs ---
+crl-verify ${EASYRSA_DIR}/pki/crl.pem
+
+status ${DATA_DIR}/openvpn-status.log ${STATUS_INTERVAL}
+status-version 3
+log ${DATA_DIR}/openvpn.log
+log-append ${DATA_DIR}/openvpn.log
+syslog
+
+# --- Management & scripts ---
+management ${MGMT_ADDR} ${OpenVpnManagement__Port}
+script-security ${SCRIPT_SECURITY}
+setenv API_PORT ${API_PORT}
+setenv API_HOST ${API_HOST}
+client-connect /etc/openvpn/scripts/client-connect.sh
+client-disconnect /etc/openvpn/scripts/client-disconnect.sh
+learn-address /etc/openvpn/scripts/learn-address.sh
+tls-verify /etc/openvpn/scripts/tls-verify.sh
+
+verb ${VERB}
+
+# --- Extra passthrough (multi-line allowed) ---
+${OVPN_EXTRA}

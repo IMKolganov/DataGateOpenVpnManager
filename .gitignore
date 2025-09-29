@@ -423,6 +423,7 @@ NuGet.config
 elasticsearch.json
 dashboardapi.json
 *.pem
+/data/
 
 # Ignore generated SSL certificate and key files
 *.crt

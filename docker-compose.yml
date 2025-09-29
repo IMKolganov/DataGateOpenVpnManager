@@ -1,7 +1,10 @@
 services:
   openvpn-main-udp:
     image: imkolganov/openvpn-gate-monitor-openvpn:latest
-    pull_policy: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
     container_name: openvpn-main-udp
     restart: unless-stopped
     networks:
@@ -11,28 +14,58 @@ services:
     devices:
       - "/dev/net/tun:/dev/net/tun"
     volumes:
-      - ./data/openvpn_udp:/openvpn-udp
+      - ./data/openvpn_udp:/openvpn-main-udp
+      - ./defaults/server.conf.template:/defaults/server.conf.template:ro
+      # - ./scripts:/scripts:ro
     ports:
       - "1295:1295/udp"
       - "5009:5009"
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
-      EASY_RSA_PATH: "/openvpn-main-udp/easy-rsa"
       DATA_DIR: /openvpn-main-udp
       PORT: "1295"
-      API_PORT: 5009
       PROTO: udp
+      API_PORT: "5009"
       OpenVpnManagement__Port: "5095"
-      OpenVpnManagement__Host: "localhost"
-      BACKEND__BASEURL: "http://localhost:5581/"
-      WAN_IF: eth0
+      MGMT_ADDR: "127.0.0.1"
+
       VPN_SUBNET: "10.50.28.0"
       VPN_NETMASK: "255.255.255.0"
+      WAN_IF: "eth0"
+      DNS1: "8.8.8.8"
+      DNS2: "1.1.1.1"
 
+      SERVER_CONF_TEMPLATE: /defaults/server.conf.template
+      SERVER_CONF: /openvpn-main-udp/server.conf
+      OVERWRITE_SERVER_CONF: "false"
+
+      ENABLE_DCO: "true"
+      AUTOBUF: "on"
+      TUN_MTU: "1500"
+      MSSFIX: "1450"
+      NCP_LIST: "AES-256-GCM:CHACHA20-POLY1305:AES-128-GCM"
+      NCP_FALLBACK: "AES-256-GCM"
+      AUTH_ALG: "SHA256"
+
+      TLS_MIN: "1.2"
+      KEEPALIVE: "15 120"
+      VERB: "4"
+      STATUS_INTERVAL: "10"
+      SCRIPT_SECURITY: "2"
+
+      PUSH_REDIRECT_TOGGLE: "on"
+      CLIENT_TO_CLIENT_TOGGLE: "off"
+      EXTRA_ROUTES: ""
+
+      ENABLE_IPV6: "off"
+      SERVER_IPV6: "fd42:1::/64"
+      DNS6_1: "2606:4700:4700::1111"
+      DNS6_2: "2606:4700:4700::1001"
+
+      RUN_USER: "nobody"
+      RUN_GROUP: "nogroup"
+      OVPN_EXTRA: ""
 
 networks:
   openvpn_network:
     driver: bridge
-
-volumes:
-  openvpn_data_main_udp:

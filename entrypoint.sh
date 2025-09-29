@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# ---------------------------
+# Core environment defaults
+# ---------------------------
 API_PORT=${API_PORT:-5010}
 API_HOST=${API_HOST:-127.0.0.1}
 PORT=${PORT:-1194}
@@ -17,6 +20,58 @@ WAN_IF="${WAN_IF:-eth0}"
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_SOURCE="/scripts"
 
+# ---------------------------
+# Template & config controls
+# ---------------------------
+SERVER_CONF_TEMPLATE=${SERVER_CONF_TEMPLATE:-/defaults/server.conf.template}
+SERVER_CONF=${SERVER_CONF:-$DATA_DIR/server.conf}
+OVERWRITE_SERVER_CONF=${OVERWRITE_SERVER_CONF:-false}
+
+# ---------------------------
+# Performance/security defaults
+# ---------------------------
+# DCO (enabled by default)
+ENABLE_DCO=${ENABLE_DCO:-true}
+
+# Buffers/MTU
+AUTOBUF=${AUTOBUF:-on}          # on/off -> sndbuf/rcvbuf 0 + push + fast-io
+TUN_MTU=${TUN_MTU:-1500}
+MSSFIX=${MSSFIX:-1450}
+
+# Ciphers (NCP)
+NCP_LIST=${NCP_LIST:-AES-256-GCM:CHACHA20-POLY1305:AES-128-GCM}
+NCP_FALLBACK=${NCP_FALLBACK:-AES-256-GCM}
+AUTH_ALG=${AUTH_ALG:-SHA256}
+
+# TLS
+TLS_MIN=${TLS_MIN:-1.2}
+TLS_GROUPS=${TLS_GROUPS:-prime256v1}   # used by easyrsa; in conf we keep tls-groups prime256v1 fixed to match
+
+# Keepalive/verbosity
+KEEPALIVE=${KEEPALIVE:-"15 120"}
+VERB=${VERB:-4}
+STATUS_INTERVAL=${STATUS_INTERVAL:-10}
+SCRIPT_SECURITY=${SCRIPT_SECURITY:-2}
+
+# IPv6
+ENABLE_IPV6=${ENABLE_IPV6:-off}
+SERVER_IPV6=${SERVER_IPV6:-fd42:1::/64}
+DNS6_1=${DNS6_1:-2606:4700:4700::1111}
+DNS6_2=${DNS6_2:-2606:4700:4700::1001}
+
+# Routing toggles
+PUSH_REDIRECT_TOGGLE=${PUSH_REDIRECT_TOGGLE:-on}  # on/off
+CLIENT_TO_CLIENT_TOGGLE=${CLIENT_TO_CLIENT_TOGGLE:-off}  # on/off
+EXTRA_ROUTES=${EXTRA_ROUTES:-}  # multi-line: e.g. 'push "route 192.168.10.0 255.255.255.0"\npush "route 10.20.0.0 255.255.0.0"'
+
+# Management & run user
+MGMT_ADDR=${MGMT_ADDR:-127.0.0.1}
+RUN_USER=${RUN_USER:-nobody}
+RUN_GROUP=${RUN_GROUP:-nogroup}
+
+# Extra passthrough
+OVPN_EXTRA=${OVPN_EXTRA:-}
+
 # .NET port
 if [ -n "$API_PORT" ]; then
   export ASPNETCORE_HTTP_PORTS="$API_PORT"
@@ -25,13 +80,18 @@ fi
 
 echo "===== STARTING OPENVPN CONTAINER ====="
 
-# NAT/forward
+# ----------------------------------------
+# NAT/forward (keep your original logic)
+# ----------------------------------------
 iptables -P FORWARD ACCEPT
 iptables -C FORWARD -i "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -i "$TUN_IF" -j ACCEPT
 iptables -C FORWARD -o "$TUN_IF" -j ACCEPT 2>/dev/null || iptables -A FORWARD -o "$TUN_IF" -j ACCEPT
 iptables -t nat -C POSTROUTING -s "$VPN_SUBNET/$VPN_NETMASK" -o "$WAN_IF" -j MASQUERADE 2>/dev/null \
   || iptables -t nat -A POSTROUTING -s "$VPN_SUBNET/$VPN_NETMASK" -o "$WAN_IF" -j MASQUERADE
 
+# ----------------------------------------
+# Copy OpenVPN hook scripts
+# ----------------------------------------
 echo "===== Copying OpenVPN hook scripts ====="
 mkdir -p /etc/openvpn/scripts
 for SCRIPT in client-connect.sh client-disconnect.sh learn-address.sh tls-verify.sh log-watcher.sh; do
@@ -46,8 +106,11 @@ for SCRIPT in client-connect.sh client-disconnect.sh learn-address.sh tls-verify
 done
 
 echo "===== Checking contents of $DATA_DIR before starting... ====="
-ls -l "$DATA_DIR"
+ls -l "$DATA_DIR" || true
 
+# ----------------------------------------
+# Easy-RSA bootstrap (keep your logic)
+# ----------------------------------------
 if [ ! -x "$EASYRSA_DIR/easyrsa" ]; then
     echo "Copying Easy-RSA to $EASYRSA_DIR..."
     mkdir -p "$EASYRSA_DIR"
@@ -85,7 +148,7 @@ else
     echo "ta.key already exists."
 fi
 
-# Ensure all required files are in /etc/openvpn
+# Copy certs/keys
 echo "===== Copying necessary certs and keys to /etc/openvpn... ====="
 declare -A FILES_TO_COPY=(
   ["$EASYRSA_DIR/pki/ca.crt"]="/etc/openvpn/ca.crt"
@@ -93,7 +156,6 @@ declare -A FILES_TO_COPY=(
   ["$EASYRSA_DIR/pki/private/server.key"]="/etc/openvpn/server.key"
   ["$EASYRSA_DIR/pki/ta.key"]="/etc/openvpn/ta.key"
 )
-
 for SRC in "${!FILES_TO_COPY[@]}"; do
   DEST=${FILES_TO_COPY[$SRC]}
   if [ -f "$SRC" ]; then
@@ -104,71 +166,91 @@ for SRC in "${!FILES_TO_COPY[@]}"; do
   fi
 done
 
-# Generate default server.conf if not present
-echo "Generating server.conf from environment..."
-cat <<EOF > "$DATA_DIR/server.conf"
-port $PORT
-proto $PROTO
-dev tun
+# ----------------------------------------
+# Build optional blocks for the template
+# ----------------------------------------
+# redirect-gateway toggle
+if [ "${PUSH_REDIRECT_TOGGLE,,}" = "on" ]; then
+  PUSH_REDIRECT='push "redirect-gateway def1"'
+else
+  PUSH_REDIRECT=''
+fi
 
-ca /etc/openvpn/ca.crt
-cert /etc/openvpn/server.crt
-key /etc/openvpn/server.key
-dh none
-tls-groups prime256v1
+# client-to-client toggle
+if [ "${CLIENT_TO_CLIENT_TOGGLE,,}" = "on" ]; then
+  CLIENT_TO_CLIENT='client-to-client'
+else
+  CLIENT_TO_CLIENT=''
+fi
 
-topology subnet
-server $VPN_SUBNET $VPN_NETMASK
-ifconfig-pool-persist /etc/openvpn/ipp.txt
+# autobuffer/fast-io block
+if [ "${AUTOBUF,,}" = "on" ]; then
+  AUTOBUF_BLOCK=$'sndbuf 0\nrcvbuf 0\npush "sndbuf 0"\npush "rcvbuf 0"\nfast-io'
+else
+  AUTOBUF_BLOCK=''
+fi
 
-push "dhcp-option DNS $DNS1"
-push "dhcp-option DNS $DNS2"
-push "block-outside-dns"
-push "redirect-gateway def1"
+# DCO block (enabled by default)
+if [ "${ENABLE_DCO,,}" = "true" ]; then
+  DCO_BLOCK=$'enable-dco\ndev-type ovpn-dco\ndev ovpn-dco'
+else
+  DCO_BLOCK=''
+fi
 
-keepalive 15 120
+# IPv6 block
+if [ "${ENABLE_IPV6,,}" = "on" ]; then
+  IPV6_BLOCK=$'tun-ipv6\nserver-ipv6 '"${SERVER_IPV6}"$'\npush "dhcp-option DNS6 '"${DNS6_1}"$'"\npush "dhcp-option DNS6 '"${DNS6_2}"$'"'
+else
+  IPV6_BLOCK=''
+fi
 
-remote-cert-tls client
-tls-version-min 1.2
-tls-crypt /etc/openvpn/ta.key
+# ----------------------------------------
+# Generate server.conf from template
+# ----------------------------------------
+generate_from_template() {
+  echo "Generating server.conf from template: $SERVER_CONF_TEMPLATE -> $SERVER_CONF"
 
-cipher AES-256-CBC
-auth SHA256
+  # Export all used variables for envsubst
+  export PORT PROTO OpenVpnManagement__Port DATA_DIR EASYRSA_DIR API_PORT API_HOST \
+         DNS1 DNS2 VPN_SUBNET VPN_NETMASK TUN_MTU MSSFIX \
+         ENABLE_DCO AUTOBUF PUSH_REDIRECT_TOGGLE CLIENT_TO_CLIENT_TOGGLE \
+         NCP_LIST NCP_FALLBACK AUTH_ALG TLS_MIN TLS_GROUPS KEEPALIVE \
+         VERB STATUS_INTERVAL SCRIPT_SECURITY ENABLE_IPV6 SERVER_IPV6 DNS6_1 DNS6_2 \
+         MGMT_ADDR RUN_USER RUN_GROUP OVPN_EXTRA EXTRA_ROUTES \
+         PUSH_REDIRECT CLIENT_TO_CLIENT AUTOBUF_BLOCK DCO_BLOCK IPV6_BLOCK
 
-user nobody
-group nogroup
+  # Strict: require envsubst and template
+  if ! command -v envsubst >/dev/null 2>&1; then
+    echo "❌ ERROR: envsubst is not available. Install gettext-base in the image."
+    exit 1
+  fi
+  if [ ! -f "$SERVER_CONF_TEMPLATE" ]; then
+    echo "❌ ERROR: Template not found at $SERVER_CONF_TEMPLATE"
+    exit 1
+  fi
 
-persist-key
-persist-tun
+  envsubst < "$SERVER_CONF_TEMPLATE" > "$SERVER_CONF"
+}
 
-crl-verify $EASYRSA_DIR/pki/crl.pem
+if [ ! -f "$SERVER_CONF" ]; then
+  generate_from_template
+else
+  if [ "${OVERWRITE_SERVER_CONF,,}" = "true" ]; then
+    echo "OVERWRITE_SERVER_CONF=true -> regenerating $SERVER_CONF from template"
+    generate_from_template
+  else
+    echo "server.conf already exists, keeping existing file."
+  fi
+fi
 
-status $DATA_DIR/openvpn-status.log
-status-version 3
-log $DATA_DIR/openvpn.log
-log-append $DATA_DIR/openvpn.log
-syslog
-
-management 127.0.0.1 $OpenVpnManagement__Port
-
-script-security 2
-setenv API_PORT $API_PORT
-setenv API_HOST $API_HOST
-client-connect /etc/openvpn/scripts/client-connect.sh
-client-disconnect /etc/openvpn/scripts/client-disconnect.sh
-learn-address /etc/openvpn/scripts/learn-address.sh
-tls-verify /etc/openvpn/scripts/tls-verify.sh
-
-verb 4
-EOF
-
-# Prepare log files
+# ----------------------------------------
+# Logs & CRL
+# ----------------------------------------
 echo "===== Clearing logs... ====="
 truncate -s 0 "$DATA_DIR/openvpn.log" || touch "$DATA_DIR/openvpn.log"
 truncate -s 0 "$DATA_DIR/openvpn-status.log" || touch "$DATA_DIR/openvpn-status.log"
 chmod 777 "$DATA_DIR/openvpn.log" "$DATA_DIR/openvpn-status.log"
 
-# Ensure crl.pem exists
 if [ ! -f "$EASYRSA_DIR/pki/crl.pem" ]; then
     echo "Generating crl.pem (empty revocation list)..."
     cd "$EASYRSA_DIR"
@@ -179,31 +261,28 @@ else
 fi
 chmod 644 "$EASYRSA_DIR/pki/crl.pem"
 
-# Add read/execute permissions to everything inside DATA_DIR
 echo "===== Setting permissions for $DATA_DIR recursively... ====="
 chmod -R a+rX "$DATA_DIR"
 
 echo "===== Fixing permissions to allow OpenVPN (user: nobody) read crl.pem ====="
-
 chmod 644 "$EASYRSA_DIR/pki/crl.pem" || echo "❌ Failed to chmod crl.pem"
 chmod o+rx "$DATA_DIR" || echo "❌ Failed to chmod $DATA_DIR"
 chmod o+rx "$EASYRSA_DIR" || echo "❌ Failed to chmod $EASYRSA_DIR"
 chmod o+rx "$EASYRSA_DIR/pki" || echo "❌ Failed to chmod $EASYRSA_DIR/pki"
-
 echo "✅ crl.pem permission fix complete"
 
 echo "===== FINAL CHECK BEFORE STARTING OPENVPN ====="
-ls -l "$DATA_DIR"
-[ -d "$EASYRSA_DIR/pki" ] && ls -l "$EASYRSA_DIR/pki"
+ls -l "$DATA_DIR" || true
+[ -d "$EASYRSA_DIR/pki" ] && ls -l "$EASYRSA_DIR/pki" || true
 
 echo "===== server.conf contents ====="
-cat "$DATA_DIR/server.conf" || echo "server.conf not found!"
+cat "$SERVER_CONF" || echo "server.conf not found!"
 
 echo "===== Starting OpenVPN in background..."
-openvpn --config "$DATA_DIR/server.conf" &
+openvpn --config "$SERVER_CONF" &
 OPENVPN_PID=$!
 
-# 👇 Added: stream OpenVPN logs to Docker stdout
+# Stream OpenVPN logs to stdout
 echo "===== Attaching OpenVPN log to stdout... ====="
 tail -F "$DATA_DIR/openvpn.log" &
 TAIL_PID=$!
@@ -214,7 +293,6 @@ echo "[entrypoint] Starting .NET application..."
 echo "⏳ Waiting for DataGateCertManager.dll and dependencies to appear..."
 timeout=10
 elapsed=0
-
 while [ ! -f /app/DataGateCertManager.dll ] || [ ! -f /app/DataGateCertManager.runtimeconfig.json ]; do
     if [ "$elapsed" -ge "$timeout" ]; then
         echo "❌ ERROR: .NET files not found after ${timeout}s, exiting"
@@ -227,9 +305,9 @@ while [ ! -f /app/DataGateCertManager.dll ] || [ ! -f /app/DataGateCertManager.r
     elapsed=$((elapsed + 1))
 done
 
-runuser -u nobody -- cat "$EASYRSA_DIR/pki/crl.pem" >/dev/null \
-  && echo "✅ nobody can read crl.pem" \
-  || echo "❌ nobody CANNOT read crl.pem"
+runuser -u "$RUN_USER" -- cat "$EASYRSA_DIR/pki/crl.pem" >/dev/null \
+  && echo "✅ $RUN_USER can read crl.pem" \
+  || echo "❌ $RUN_USER CANNOT read crl.pem"
 
 echo "✅ Found required .NET files"
 cd /app
@@ -240,11 +318,10 @@ DOTNET_PID=$!
 # Wait for OpenVPN and .NET
 wait $OPENVPN_PID
 OPENVPN_EXIT_CODE=$?
-
 wait $DOTNET_PID
 DOTNET_EXIT_CODE=$?
 
-# Kill tail (optional, for clean shutdown)
+# Clean shutdown
 kill $TAIL_PID 2>/dev/null || true
 
 if [ $OPENVPN_EXIT_CODE -ne 0 ]; then

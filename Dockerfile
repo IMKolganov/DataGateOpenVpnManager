@@ -1,58 +1,34 @@
-# Use the .NET SDK for building
+# syntax=docker/dockerfile:1.7
+
+# 1) build stage
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-
-LABEL maintainer="Ivan Kolganov with ❤️ via Kyle Manna's template"
-
-# Set the working directory
 WORKDIR /src
-
-# Copy the project file and restore dependencies
 COPY ["DataGateCertManager/DataGateCertManager.csproj", "DataGateCertManager/"]
 WORKDIR /src/DataGateCertManager
 RUN dotnet restore "DataGateCertManager.csproj"
-
-# Copy the rest of the application source code
 WORKDIR /src
 COPY . .
 
-# Publish the application (framework-dependent)
-FROM build AS publish
+# 2) publish stage (renamed)
+FROM build AS app_publish
 ARG BUILD_CONFIGURATION=Release
 RUN echo "Using build configuration: $BUILD_CONFIGURATION" && \
     dotnet publish "DataGateCertManager/DataGateCertManager.csproj" \
-      -c $BUILD_CONFIGURATION \
-      -o /app/publish
+      -c $BUILD_CONFIGURATION -o /app/publish
 
-# Final runtime image
+# 3) final stage
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
-
-# Use root initially to allow setting permissions
 USER root
-
-# Install required packages
-RUN apt-get update && \
-    apt-get install -y \
-    curl \
-    nano \
-    iptables \
-    easy-rsa \
-    openvpn \
+RUN apt-get update && apt-get install -y \
+    curl nano iptables easy-rsa openvpn gettext-base openvpn-dco-dkms \
     && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
-
-# Copy published app
-COPY --from=publish /app/publish .
-
-# Copy scripts and entrypoint
+COPY --from=app_publish /app/publish .
+COPY defaults/server.conf.template /defaults/server.conf.template
 COPY scripts /scripts
 COPY entrypoint.sh /entrypoint.sh
-
-# 🔧 Convert CRLF to LF
 RUN sed -i 's/\r$//' /entrypoint.sh && \
-    find /scripts -name '*.sh' -exec sed -i 's/\r$//' {} +
-
-# Make scripts executable
-RUN chmod +x /entrypoint.sh && chmod +x /scripts/*.sh
-
+    find /scripts -name '*.sh' -exec sed -i 's/\r$//' {} + && \
+    sed -i 's/\r$//' /defaults/server.conf.template && \
+    chmod +x /entrypoint.sh && chmod +x /scripts/*.sh
 ENTRYPOINT ["/entrypoint.sh"]
