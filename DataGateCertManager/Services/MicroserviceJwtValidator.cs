@@ -3,13 +3,13 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using DataGateCertManager.Services.Interfaces;
 using Microsoft.IdentityModel.Tokens;
+using OpenVPNGateMonitor.SharedModels.Responses;
 
 namespace DataGateCertManager.Services;
 
 public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<MicroserviceJwtValidator> logger)
     : IMicroserviceJwtValidator
 {
-    private readonly ILogger<MicroserviceJwtValidator> _logger = logger;
     private string? _publicKey;
 
     public async Task InitAsync()
@@ -23,21 +23,25 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
 
             try
             {
-                _logger.LogInformation("🔐 Attempt to fetch public key from backend with pin {Pin}...", pin);
+                logger.LogInformation("🔐 Attempt to fetch public key from backend with pin {Pin}...", pin);
 
-                var response = await httpClient.GetStringAsync($"api/Auth/public-key/{pin}");
+                var response = await httpClient.GetFromJsonAsync<ApiResponse<string>>($"api/Auth/public-key/{pin}");
 
-                _publicKey = response;
+                if (response is { Success: true, Data: not null })
+                {
+                    _publicKey = response.Data;
+                    logger.LogInformation("✅ Successfully retrieved public key from backend.");
+                    return;
+                }
 
-                _logger.LogInformation("✅ Successfully retrieved public key from backend.");
-                return;
+                logger.LogWarning("⚠️ Backend responded with error: {Message}", response?.Message ?? "Unknown error");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "⚠️ Failed to get public key with pin {Pin}. Retrying in {Delay}s...",
-                    pin, delaySeconds);
-                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+                logger.LogWarning(ex, "⚠️ Failed to get public key with pin {Pin}. Retrying in {Delay}s...", pin, delaySeconds);
             }
+
+            await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
         }
     }
 
@@ -81,7 +85,7 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("❌ Token validation error: {Message}", ex.Message);
+            logger.LogWarning("❌ Token validation error: {Message}", ex.Message);
             principal = null;
             return false;
         }
