@@ -1,13 +1,8 @@
-using System.Reflection;
 using DataGateOpenVpnManager.Configurations;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 builder.Host.ConfigureSerilog();
-var logger = Log.ForContext("SourceContext", "DILogger");
-var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown version";
-logger.Information($"Application version: {version};");
 
 builder.Services.ConfigureServices(builder.Configuration);
 builder.Services.ConfigureSignalR(builder.Configuration);
