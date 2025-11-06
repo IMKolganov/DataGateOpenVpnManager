@@ -7,14 +7,14 @@ using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 namespace DataGateOpenVpnManager.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/ovpn-files")]
 public class OvpnFileController(
     IOvpnFileService ovpnFileService,
     IEasyRsaPathResolver easyRsaPathResolver,
     ILogger<OvpnFileController> logger)
     : ControllerBase
 {
-    [HttpPost("AddOvpnFile")]
+    [HttpPost("add")]
     public async Task<ActionResult<OvpnFileMetadata>> AddOvpnFile([FromBody] GenerateOvpnFileRequest request,
         CancellationToken cancellationToken)
     {
@@ -47,7 +47,7 @@ public class OvpnFileController(
         }
     }
 
-    [HttpPost("RevokeOvpnFile")]
+    [HttpPost("revoke")]
     public async Task<ActionResult<OvpnFileMetadata>> RevokeOvpnFile([FromBody] RevokeOvpnFileRequest request, 
         CancellationToken cancellationToken)
     {
@@ -71,7 +71,7 @@ public class OvpnFileController(
         }
     }
 
-    [HttpPost("DownloadOvpnFile")]
+    [HttpPost("download")]
     public async Task<ActionResult<OvpnFileDownload>> DownloadOvpnFile([FromBody] DownloadOvpnFileRequest request,
         CancellationToken cancellationToken)
     {

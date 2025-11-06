@@ -6,7 +6,7 @@ using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.VpnEvent.Requests;
 namespace DataGateOpenVpnManager.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/vpn-events")]
 public class VpnEventController(
     ILogger<VpnEventController> logger,
     IHubContext<OpenVpnEventHub> hubContext) : ControllerBase

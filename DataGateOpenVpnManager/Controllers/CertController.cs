@@ -7,14 +7,14 @@ using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 namespace DataGateOpenVpnManager.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/certs")]
 public class CertController(
     IEasyRsaService easyRsaService,
     IEasyRsaPathResolver easyRsaPathResolver,
     ILogger<CertController> logger)
     : ControllerBase
 {
-    [HttpGet("GetAllCertificates")]
+    [HttpGet("get-all")]
     public async Task<ActionResult<List<ServerCertificate>>> GetAllCertificates(CancellationToken cancellationToken)
     {
         try
@@ -34,7 +34,7 @@ public class CertController(
         }
     }
     
-    [HttpPost("AddServerCertificate")]
+    [HttpPost("add")]
     public async Task<ActionResult<ServerCertificate>> AddServerCertificate(
         [FromBody] AddServerCertificateRequest request, CancellationToken cancellationToken)
     {
@@ -62,7 +62,7 @@ public class CertController(
         }
     }
 
-    [HttpPost("RevokeCertificate")]
+    [HttpPost("revoke")]
     public async Task<ActionResult<ServerCertificate>> RevokeCertificate([FromBody] 
         RevokeServerCertificateRequest request, CancellationToken cancellationToken)
     {
