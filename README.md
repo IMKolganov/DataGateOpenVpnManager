@@ -1,8 +1,8 @@
-# DataGateCertManager + OpenVPN Docker Image
+# DataGateOpenVpnManager + OpenVPN Docker Image
 
 This project builds a Docker image containing:
 
-* A .NET 9 application: **DataGateCertManager**
+* A .NET 9 application: **DataGateOpenVpnManager**
 * A fully functional **OpenVPN server**
 * Integrated **Easy-RSA** certificate management
 
@@ -13,8 +13,8 @@ It uses a custom entrypoint to initialize PKI, generate default configuration, a
 ## 📥 Clone the Repository
 
 ```bash
-git clone https://github.com/IMKolganov/DataGateCertManager.git
-cd DataGateCertManager
+git clone https://github.com/IMKolganov/DataGateOpenVpnManager.git
+cd DataGateOpenVpnManager
 ```
 
 ---
@@ -138,7 +138,7 @@ services:
 
 Created by **Ivan Kolganov** ❤️ based on Kyle Manna’s OpenVPN concepts.
 
-GitHub: [IMKolganov/DataGateCertManager](https://github.com/IMKolganov/DataGateCertManager)
+GitHub: [IMKolganov/DataGateOpenVpnManager](https://github.com/IMKolganov/DataGateOpenVpnManager)
 
 ---
 

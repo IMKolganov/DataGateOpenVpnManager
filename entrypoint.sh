@@ -211,11 +211,11 @@ TAIL_PID=$!
 echo "[entrypoint] Starting .NET application..."
 
 # Wait for .NET files
-echo "⏳ Waiting for DataGateCertManager.dll and dependencies to appear..."
+echo "⏳ Waiting for DataGateOpenVpnManager.dll and dependencies to appear..."
 timeout=10
 elapsed=0
 
-while [ ! -f /app/DataGateCertManager.dll ] || [ ! -f /app/DataGateCertManager.runtimeconfig.json ]; do
+while [ ! -f /app/DataGateOpenVpnManager.dll ] || [ ! -f /app/DataGateOpenVpnManager.runtimeconfig.json ]; do
     if [ "$elapsed" -ge "$timeout" ]; then
         echo "❌ ERROR: .NET files not found after ${timeout}s, exiting"
         echo "🔍 /app contents:"
@@ -234,7 +234,7 @@ runuser -u nobody -- cat "$EASYRSA_DIR/pki/crl.pem" >/dev/null \
 echo "✅ Found required .NET files"
 cd /app
 
-dotnet DataGateCertManager.dll &
+dotnet DataGateOpenVpnManager.dll &
 DOTNET_PID=$!
 
 # Wait for OpenVPN and .NET
