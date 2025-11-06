@@ -5,7 +5,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
-        <RootNamespace>DataGateCertManager.Tests</RootNamespace>
+        <RootNamespace>DataGateOpenVpnManager.Tests</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>

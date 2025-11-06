@@ -7,7 +7,7 @@
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
         <AssemblyVersion>1.1.5.41</AssemblyVersion>
         <FileVersion>1.1.5.41</FileVersion>
-        <RootNamespace>DataGateCertManager</RootNamespace>
+        <RootNamespace>DataGateOpenVpnManager</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
