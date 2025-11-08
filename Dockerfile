@@ -7,9 +7,9 @@ LABEL maintainer="Ivan Kolganov with ❤️ via Kyle Manna's template"
 WORKDIR /src
 
 # Copy the project file and restore dependencies
-COPY ["DataGateCertManager/DataGateCertManager.csproj", "DataGateCertManager/"]
-WORKDIR /src/DataGateCertManager
-RUN dotnet restore "DataGateCertManager.csproj"
+COPY ["DataGateOpenVpnManager/DataGateOpenVpnManager.csproj", "DataGateOpenVpnManager/"]
+WORKDIR /src/DataGateOpenVpnManager
+RUN dotnet restore "DataGateOpenVpnManager.csproj"
 
 # Copy the rest of the application source code
 WORKDIR /src
@@ -19,7 +19,7 @@ COPY . .
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN echo "Using build configuration: $BUILD_CONFIGURATION" && \
-    dotnet publish "DataGateCertManager/DataGateCertManager.csproj" \
+    dotnet publish "DataGateOpenVpnManager/DataGateOpenVpnManager.csproj" \
       -c $BUILD_CONFIGURATION \
       -o /app/publish
 

@@ -1,0 +1,10 @@
+﻿namespace DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
+
+public interface IBashCommandRunner
+{
+    Task<(string Output, int ExitCode)> RunCommandAsync(
+        string command,
+        Dictionary<string, string>? environmentVariables,
+        CancellationToken cancellationToken,
+        string? workingDirectory = null);
+}
