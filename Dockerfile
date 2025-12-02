@@ -1,21 +1,48 @@
-# Use the .NET SDK for building
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+# ==========================
+# Stage 1: Build OpenVPN 2.6.17 from source
+# ==========================
+FROM debian:12-slim AS openvpn-build
+
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        libssl-dev \
+        liblz4-dev \
+        liblzo2-dev \
+        libpam0g-dev \
+        libpkcs11-helper1-dev \
+        libnl-3-dev \
+        libnl-genl-3-dev \
+        libcap-ng-dev \
+        pkg-config \
+        wget && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /tmp
+
+RUN wget -O openvpn.tar.gz https://swupdate.openvpn.net/community/releases/openvpn-2.6.17.tar.gz && \
+    tar xzf openvpn.tar.gz && \
+    cd openvpn-2.6.17 && \
+    ./configure --disable-debug --disable-dependency-tracking && \
+    make -j"$(nproc)" && \
+    make install && \
+    strip /usr/local/sbin/openvpn
+# ==========================
+# Stage 2: Build .NET app (.NET 10)
+# ==========================
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 LABEL maintainer="Ivan Kolganov with ❤️ via Kyle Manna's template"
 
-# Set the working directory
 WORKDIR /src
 
-# Copy the project file and restore dependencies
 COPY ["DataGateOpenVpnManager/DataGateOpenVpnManager.csproj", "DataGateOpenVpnManager/"]
 WORKDIR /src/DataGateOpenVpnManager
 RUN dotnet restore "DataGateOpenVpnManager.csproj"
 
-# Copy the rest of the application source code
 WORKDIR /src
 COPY . .
 
-# Publish the application (framework-dependent)
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
 RUN echo "Using build configuration: $BUILD_CONFIGURATION" && \
@@ -23,36 +50,40 @@ RUN echo "Using build configuration: $BUILD_CONFIGURATION" && \
       -c $BUILD_CONFIGURATION \
       -o /app/publish
 
-# Final runtime image
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 
-# Use root initially to allow setting permissions
+# ==========================
+# Stage 3: Final runtime image (.NET 10 + OpenVPN 2.6.17)
+# ==========================
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
 USER root
 
-# Install required packages
 RUN apt-get update && \
     apt-get install -y \
-    curl \
-    nano \
-    iptables \
-    easy-rsa \
-    openvpn \
-    && rm -rf /var/lib/apt/lists/*
+        curl \
+        nano \
+        iptables \
+        iproute2 \
+        easy-rsa \
+        liblz4-1 \
+        liblzo2-2 \
+        libpkcs11-helper1 \
+        libnl-3-200 \
+        libnl-genl-3-200 \
+        libcap-ng0 && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=openvpn-build /usr/local/sbin/openvpn /usr/local/sbin/openvpn
 
 WORKDIR /app
 
-# Copy published app
 COPY --from=publish /app/publish .
 
-# Copy scripts and entrypoint
 COPY scripts /scripts
 COPY entrypoint.sh /entrypoint.sh
 
-# 🔧 Convert CRLF to LF
 RUN sed -i 's/\r$//' /entrypoint.sh && \
-    find /scripts -name '*.sh' -exec sed -i 's/\r$//' {} +
-
-# Make scripts executable
-RUN chmod +x /entrypoint.sh && chmod +x /scripts/*.sh
+    find /scripts -name '*.sh' -exec sed -i 's/\r$//' {} + && \
+    chmod +x /entrypoint.sh && chmod +x /scripts/*.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

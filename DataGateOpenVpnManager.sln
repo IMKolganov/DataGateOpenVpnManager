@@ -13,6 +13,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		docker-compose.yml = docker-compose.yml
 		defaults\server.conf.template = defaults\server.conf.template
 		global.json = global.json
+		docker-compose.local.yml = docker-compose.local.yml
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataGateOpenVpnManager.Tests", "DataGateOpenVpnManager.Tests\DataGateOpenVpnManager.Tests.csproj", "{D6D62288-7FDA-4FF3-A476-9A557E9200DE}"
