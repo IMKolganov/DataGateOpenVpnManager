@@ -47,7 +47,7 @@ fi
 post_bg() {
   (
     curl -sS --max-time 3 -H "Content-Type: application/json" \
-      -X POST "$API_BASE/api/vpnEvent/disconnect" \
+      -X POST "$API_BASE/api/vpn-events/disconnect" \
       -d "$(cat <<JSON
 {
   "EventType": "ClientDisconnect",
