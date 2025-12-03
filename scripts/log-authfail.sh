@@ -1,10 +1,10 @@
 #!/bin/sh
-# Watch OpenVPN log for AUTH_FAILED and post /authfail
+# Watch OpenVPN log for AUTH_FAILED and post /error
 
 set -eu
 
 LOG_FILE="${OVPN_LOG_FILE:-/var/log/openvpn.log}"
-API_BASE="http://127.0.0.1:${API_PORT:-5010}"
+API_BASE="http://${API_HOST:-127.0.0.1}:${API_PORT:-5010}"
 
 sanitize() {
   printf "%s" "${1:-}" | tr '\n' ' ' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
@@ -13,7 +13,7 @@ sanitize() {
 post_bg() {
   (
     curl -sS --max-time 2 -H "Content-Type: application/json" \
-      -X POST "$API_BASE/api/vpnEvent/authfail" \
+      -X POST "$API_BASE/api/vpn-events/error" \
       -d "$1" >/dev/null 2>&1
   ) &
 }

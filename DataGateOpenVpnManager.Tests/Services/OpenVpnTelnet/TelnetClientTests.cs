@@ -97,7 +97,6 @@ public class TelnetClientTests
 
         client.OnDataReceived += (data) => receivedData = data;
 
-        // Act — вызов через `Invoke` делегата напрямую
         var fieldInfo = typeof(TelnetClient).GetField("OnDataReceived",
             BindingFlags.Instance | BindingFlags.NonPublic);
 

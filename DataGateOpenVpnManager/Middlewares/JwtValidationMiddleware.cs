@@ -12,11 +12,11 @@ public class JwtValidationMiddleware(RequestDelegate next)
 
     private static readonly string[] LocalOnlyPaths =
     {
-        "/api/vpnEvent/connect",
-        "/api/vpnEvent/disconnect",
-        "/api/vpnEvent/tlsverify",
-        "/api/vpnEvent/attempt",
-        "/api/vpnEvent/envdump"
+        "/api/vpn-events/connect",
+        "/api/vpn-events/disconnect",
+        "/api/vpn-events/tlsverify",
+        "/api/vpn-events/attempt",
+        "/api/vpn-events/envdump"
     };
 
     public async Task Invoke(HttpContext context, IMicroserviceJwtValidator validator)

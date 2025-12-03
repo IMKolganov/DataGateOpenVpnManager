@@ -428,3 +428,4 @@ dashboardapi.json
 *.crt
 *.key
 *.cnf
+data

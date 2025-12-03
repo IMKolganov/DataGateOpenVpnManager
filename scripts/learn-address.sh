@@ -43,7 +43,7 @@ CS_ISO=""
 post_bg() {
   (
     curl -sS --max-time 2 -H "Content-Type: application/json" \
-      -X POST "$API_BASE/api/vpnEvent/attempt" \
+      -X POST "$API_BASE/api/vpn-events/attempt" \
       -d "$(cat <<JSON
 {
   "EventType": "LearnAdd",

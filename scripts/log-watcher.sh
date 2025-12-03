@@ -6,7 +6,7 @@ set -eu
 # ---- config ----
 API_HOST="${API_HOST:-127.0.0.1}"
 API_PORT="${API_PORT:-5010}"
-API_URL="http://${API_HOST}:${API_PORT}/api/vpnEvent/error"
+API_URL="http://${API_HOST}:${API_PORT}/api/vpn-events/error"
 VPN_SERVER_ID="${VPN_SERVER_ID:-0}"
 LOG_FILE="${LOG_FILE:-/var/log/openvpn.log}"
 

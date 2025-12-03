@@ -16,7 +16,7 @@ subject="${2:-}"        # full subject, if provided
 post_bg() {
   (
     curl -sS --max-time 2 -H "Content-Type: application/json" \
-      -X POST "$API_BASE/api/vpnEvent/tlsverify" -d "$1" >/dev/null 2>&1
+      -X POST "$API_BASE/api/vpn-events/tlsverify" -d "$1" >/dev/null 2>&1
   ) &
 }
 
