@@ -20,12 +20,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DataGateOpenVpnManager.Test
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{4F53A3D0-6814-457B-9CDD-F77866AC7673}"
 	ProjectSection(SolutionItems) = preProject
-		Scripts\client-connect.sh = Scripts\client-connect.sh
-		Scripts\client-disconnect.sh = Scripts\client-disconnect.sh
-		Scripts\learn-address.sh = Scripts\learn-address.sh
-		Scripts\log-watcher.sh = Scripts\log-watcher.sh
-		Scripts\server.conf = Scripts\server.conf
-		Scripts\tls-verify.sh = Scripts\tls-verify.sh
+		scripts\client-connect.sh = scripts\client-connect.sh
+		scripts\client-disconnect.sh = scripts\client-disconnect.sh
+		scripts\learn-address.sh = scripts\learn-address.sh
+		scripts\log-watcher.sh = scripts\log-watcher.sh
+		scripts\server.conf = scripts\server.conf
+		scripts\tls-verify.sh = scripts\tls-verify.sh
+		scripts\log-authfail.sh = scripts\log-authfail.sh
 	EndProjectSection
 EndProject
 Global
