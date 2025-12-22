@@ -5,22 +5,22 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
-        <AssemblyVersion>1.2.5.43</AssemblyVersion>
-        <FileVersion>1.2.5.43</FileVersion>
+        <AssemblyVersion>1.2.5.44</AssemblyVersion>
+        <FileVersion>1.2.5.44</FileVersion>
         <RootNamespace>DataGateOpenVpnManager</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Elastic.Clients.Elasticsearch" Version="9.2.2" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-        <PackageReference Include="OpenVPNGateMonitor.SharedModels" Version="1.0.66" />
+        <PackageReference Include="OpenVPNGateMonitor.SharedModels" Version="1.0.76" />
         <PackageReference Include="Serilog" Version="4.3.0" />
         <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
         <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
         <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="10.0.0" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.0.1" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.0" />
         <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
     </ItemGroup>
 
