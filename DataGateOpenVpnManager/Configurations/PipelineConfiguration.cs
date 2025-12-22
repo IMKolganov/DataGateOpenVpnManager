@@ -17,6 +17,11 @@ public static class PipelineConfiguration
                 options.HeadContent = @"<link rel=""icon"" type=""image/png"" href=""/favicon.ico"">";
             });
         }
+        
+        app.UseWebSockets(new WebSocketOptions
+        {
+            KeepAliveInterval = TimeSpan.FromSeconds(20)
+        });
 
         app.UseAuthorization();
         app.MapControllers();
