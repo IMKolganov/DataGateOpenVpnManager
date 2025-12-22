@@ -7,10 +7,10 @@ namespace DataGateOpenVpnManager.Controllers;
 [ApiController]
 [Route("api/proxy")]
 public class OpenVpnProxyController(
-    ILogger<CertController> logger)
+    IConfiguration config,
+    ILogger<OpenVpnProxyController> logger)
     : ControllerBase
 {
-    
     [HttpGet]
     public async Task Get()
     {
@@ -21,92 +21,150 @@ public class OpenVpnProxyController(
             return;
         }
 
+        var portRaw = config["PORT"];
+        if (!int.TryParse(portRaw, out var vpnPort) || vpnPort <= 0 || vpnPort > 65535)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await HttpContext.Response.WriteAsync("VPN port is not configured");
+            return;
+        }
+
+        const string targetHost = "127.0.0.1";
+
         using var ws = await HttpContext.WebSockets.AcceptWebSocketAsync();
 
-        // OpenVPN TCP endpoint (usually localhost or docker service)
-        const string targetHost = "127.0.0.1";
-        const int targetPort = 1194;
+        using var tcp = new TcpClient { NoDelay = true };
+        try
+        {
+            await tcp.ConnectAsync(targetHost, vpnPort);
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "TCP connect failed. {Host}:{Port}. {Message}", targetHost, vpnPort, e.Message);
 
-        using var tcp = new TcpClient();
-        await tcp.ConnectAsync(targetHost, targetPort);
+            try
+            {
+                if (ws.State == WebSocketState.Open)
+                {
+                    await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "TCP connect failed", CancellationToken.None);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogTrace("Something went wrong. When ... {Message}", ex.Message);
+            }
+
+            return;
+        }
 
         await using var tcpStream = tcp.GetStream();
 
         var ct = HttpContext.RequestAborted;
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        var wsToTcp = PumpWebSocketToTcp(ws, tcpStream, ct);
-        var tcpToWs = PumpTcpToWebSocket(ws, tcpStream, ct);
+        var wsToTcp = PumpWebSocketToTcp(ws, tcpStream, linkedCts.Token, logger);
+        var tcpToWs = PumpTcpToWebSocket(ws, tcpStream, linkedCts.Token, logger);
 
         await Task.WhenAny(wsToTcp, tcpToWs);
+        await linkedCts.CancelAsync();
+
+        try
+        {
+            await Task.WhenAll(wsToTcp, tcpToWs);
+        }
+        catch (Exception ex)
+        {
+            logger.LogTrace("Something went wrong. {Message}", ex.Message);
+        }
 
         try
         {
             if (ws.State == WebSocketState.Open)
             {
-                await ws.CloseAsync(
-                    WebSocketCloseStatus.NormalClosure,
-                    "Closing",
-                    CancellationToken.None
-                );
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
             }
         }
-        catch(Exception e)
+        catch (Exception e)
         {
-            logger.LogError(e, "Error while connecting to websocket. {Message}", e.Message);
+            logger.LogDebug(e, "WebSocket close error. {Message}", e.Message);
         }
     }
 
     private static async Task PumpWebSocketToTcp(
         WebSocket ws,
         NetworkStream tcp,
-        CancellationToken ct)
+        CancellationToken ct,
+        ILogger logger)
     {
         var buffer = new byte[16 * 1024];
 
-        while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+        try
         {
-            var result = await ws.ReceiveAsync(buffer, ct);
-
-            if (result.MessageType == WebSocketMessageType.Close)
-                break;
-
-            if (result.MessageType != WebSocketMessageType.Binary)
-                continue;
-
-            await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
-
-            while (!result.EndOfMessage)
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
             {
-                result = await ws.ReceiveAsync(buffer, ct);
-                if (result.MessageType != WebSocketMessageType.Binary)
+                var result = await ws.ReceiveAsync(buffer, ct);
+
+                if (result.MessageType == WebSocketMessageType.Close)
                     break;
 
-                await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
-            }
+                if (result.MessageType != WebSocketMessageType.Binary)
+                    continue;
 
-            await tcp.FlushAsync(ct);
+                await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
+
+                while (!result.EndOfMessage)
+                {
+                    result = await ws.ReceiveAsync(buffer, ct);
+                    if (result.MessageType != WebSocketMessageType.Binary)
+                        break;
+
+                    await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
+                }
+
+                await tcp.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException ex)
+        {
+            logger.LogTrace("Connection cancelled. {Message}", ex.Message);
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "WS->TCP pump error. {Message}", e.Message);
         }
     }
 
     private static async Task PumpTcpToWebSocket(
         WebSocket ws,
         NetworkStream tcp,
-        CancellationToken ct)
+        CancellationToken ct,
+        ILogger logger)
     {
         var buffer = new byte[16 * 1024];
 
-        while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+        try
         {
-            var read = await tcp.ReadAsync(buffer, ct);
-            if (read <= 0)
-                break;
+            while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
+            {
+                var read = await tcp.ReadAsync(buffer, ct);
+                if (read <= 0)
+                    break;
 
-            await ws.SendAsync(
-                buffer.AsMemory(0, read),
-                WebSocketMessageType.Binary,
-                endOfMessage: true,
-                cancellationToken: ct
-            );
+                await ws.SendAsync(
+                    buffer.AsMemory(0, read),
+                    WebSocketMessageType.Binary,
+                    endOfMessage: true,
+                    cancellationToken: ct
+                );
+            }
+        }
+        catch (OperationCanceledException ex)
+        {
+            logger.LogTrace("Connection cancelled. {Message}", ex.Message);
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "TCP->WS pump error. {Message}", e.Message);
         }
     }
 }
