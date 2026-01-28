@@ -5,14 +5,14 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
-        <AssemblyVersion>1.2.5.44</AssemblyVersion>
-        <FileVersion>1.2.5.44</FileVersion>
+        <AssemblyVersion>1.2.5.45</AssemblyVersion>
+        <FileVersion>1.2.5.45</FileVersion>
         <RootNamespace>DataGateOpenVpnManager</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Elastic.Clients.Elasticsearch" Version="9.2.2" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+        <PackageReference Include="Elastic.Clients.Elasticsearch" Version="9.2.3" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="OpenVPNGateMonitor.SharedModels" Version="1.0.76" />
         <PackageReference Include="Serilog" Version="4.3.0" />
