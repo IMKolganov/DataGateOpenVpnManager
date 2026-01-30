@@ -12,6 +12,9 @@ public class OpenVpnProxyController(
     ILogger<OpenVpnProxyController> logger)
     : ControllerBase
 {
+    private const int MaxUdpDatagramSize = 64 * 1024;
+    private const int WsSegmentSize = 16 * 1024;
+
     [HttpGet]
     public async Task Get([FromQuery] string? mode = null)
     {
@@ -31,7 +34,7 @@ public class OpenVpnProxyController(
         }
 
         const string targetHost = "127.0.0.1";
-        var targetIp = IPAddress.Parse(targetHost);
+        var targetIp = IPAddress.Loopback;
 
         using var ws = await HttpContext.WebSockets.AcceptWebSocketAsync();
 
@@ -43,13 +46,9 @@ public class OpenVpnProxyController(
         try
         {
             if (modeNorm == "udp")
-            {
                 await HandleUdp(ws, targetIp, vpnPort, linkedCts.Token, logger);
-            }
             else
-            {
                 await HandleTcp(ws, targetHost, vpnPort, linkedCts.Token, logger);
-            }
         }
         catch (OperationCanceledException)
         {
@@ -80,6 +79,7 @@ public class OpenVpnProxyController(
     {
         using var tcp = new TcpClient();
         tcp.NoDelay = true;
+
         try
         {
             await tcp.ConnectAsync(targetHost, vpnPort, ct);
@@ -87,17 +87,7 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogError(e, "TCP connect failed. {Host}:{Port}. {Message}", targetHost, vpnPort, e.Message);
-
-            try
-            {
-                if (ws.State == WebSocketState.Open)
-                    await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "TCP connect failed", CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                logger.LogTrace("WebSocket close failed. {Message}", ex.Message);
-            }
-
+            await TryCloseWs(ws, "TCP connect failed", logger);
             return;
         }
 
@@ -119,6 +109,11 @@ public class OpenVpnProxyController(
         var remote = new IPEndPoint(targetIp, vpnPort);
 
         using var udp = new UdpClient(0);
+
+        // Helps with bursts; adjust if you see memory pressure.
+        udp.Client.SendBufferSize = 4 * 1024 * 1024;
+        udp.Client.ReceiveBufferSize = 4 * 1024 * 1024;
+
         try
         {
             udp.Connect(remote);
@@ -126,50 +121,65 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogError(e, "UDP connect failed. {Host}:{Port}. {Message}", remote.Address, remote.Port, e.Message);
-
-            try
-            {
-                if (ws.State == WebSocketState.Open)
-                    await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, "UDP connect failed", CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                logger.LogTrace("WebSocket close failed. {Message}", ex.Message);
-            }
-
+            await TryCloseWs(ws, "UDP connect failed", logger);
             return;
         }
 
-        // WS -> UDP
+        logger.LogInformation("UDP proxy started. remote={Remote} local={Local}",
+            remote, udp.Client.LocalEndPoint);
+
+        // WS -> UDP (supports WS fragmentation)
         var wsToUdp = Task.Run(async () =>
         {
-            var buffer = new byte[64 * 1024];
+            var segment = new byte[WsSegmentSize];
+            var datagram = new byte[MaxUdpDatagramSize];
 
             try
             {
                 while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
                 {
-                    var result = await ws.ReceiveAsync(buffer, ct);
+                    var total = 0;
 
-                    if (result.MessageType == WebSocketMessageType.Close)
-                        break;
-
-                    if (result.MessageType != WebSocketMessageType.Binary)
-                        continue;
-
-                    // We require one WS binary message = one UDP datagram.
-                    if (!result.EndOfMessage)
+                    while (true)
                     {
-                        // Drain remaining fragments to keep the stream consistent.
-                        while (!result.EndOfMessage)
-                            result = await ws.ReceiveAsync(buffer, ct);
+                        var result = await ws.ReceiveAsync(segment, ct);
 
-                        logger.LogDebug("Fragmented WS binary message is not supported in UDP mode.");
-                        break;
+                        if (result.MessageType == WebSocketMessageType.Close)
+                            return;
+
+                        if (result.MessageType != WebSocketMessageType.Binary)
+                        {
+                            // Drain remainder of this message (if fragmented), then ignore it.
+                            while (!result.EndOfMessage)
+                                result = await ws.ReceiveAsync(segment, ct);
+
+                            total = 0;
+                            break;
+                        }
+
+                        if (result.Count > 0)
+                        {
+                            if (total + result.Count > datagram.Length)
+                            {
+                                logger.LogWarning("WS binary message exceeds UDP max size ({Max}). Dropping.", MaxUdpDatagramSize);
+
+                                while (!result.EndOfMessage)
+                                    result = await ws.ReceiveAsync(segment, ct);
+
+                                total = 0;
+                                break;
+                            }
+
+                            Buffer.BlockCopy(segment, 0, datagram, total, result.Count);
+                            total += result.Count;
+                        }
+
+                        if (result.EndOfMessage)
+                            break;
                     }
 
-                    if (result.Count > 0)
-                        await udp.SendAsync(buffer.AsMemory(0, result.Count), ct);
+                    if (total > 0)
+                        await udp.SendAsync(datagram.AsMemory(0, total), ct);
                 }
             }
             catch (OperationCanceledException)
@@ -216,6 +226,21 @@ public class OpenVpnProxyController(
         }, ct);
 
         await Task.WhenAny(wsToUdp, udpToWs);
+
+        logger.LogInformation("UDP proxy stopped. remote={Remote}", remote);
+    }
+
+    private static async Task TryCloseWs(WebSocket ws, string reason, ILogger logger)
+    {
+        try
+        {
+            if (ws.State == WebSocketState.Open)
+                await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, reason, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            logger.LogTrace("WebSocket close failed. {Message}", ex.Message);
+        }
     }
 
     private static async Task PumpWebSocketToTcp(
@@ -249,7 +274,8 @@ public class OpenVpnProxyController(
                     await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
                 }
 
-                await tcp.FlushAsync(ct);
+                // NetworkStream flush is typically unnecessary and may hurt throughput/latency.
+                // await tcp.FlushAsync(ct);
             }
         }
         catch (OperationCanceledException ex)
