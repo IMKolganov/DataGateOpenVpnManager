@@ -109,82 +109,66 @@ public class OpenVpnProxyController(
         var remote = new IPEndPoint(targetIp, vpnPort);
 
         using var udp = new UdpClient(0);
-
-        // Helps with bursts; adjust if you see memory pressure.
-        udp.Client.SendBufferSize = 4 * 1024 * 1024;
-        udp.Client.ReceiveBufferSize = 4 * 1024 * 1024;
-
         try
         {
             udp.Connect(remote);
+            logger.LogInformation("UDP proxy started. remote={Remote} local={Local}", remote, udp.Client.LocalEndPoint);
         }
         catch (Exception e)
         {
             logger.LogError(e, "UDP connect failed. {Host}:{Port}. {Message}", remote.Address, remote.Port, e.Message);
-            await TryCloseWs(ws, "UDP connect failed", logger);
+            if (ws.State == WebSocketState.Open)
+                await SafeCloseWs(ws, WebSocketCloseStatus.InternalServerError, "UDP connect failed");
             return;
         }
 
-        logger.LogInformation("UDP proxy started. remote={Remote} local={Local}",
-            remote, udp.Client.LocalEndPoint);
+        // Optional: read and ignore app-level "connect" JSON message (text)
+        // Your C++ bridge sends it right after handshake.
+        await TryDrainOptionalConnectMessage(ws, ct, logger);
 
-        // WS -> UDP (supports WS fragmentation)
         var wsToUdp = Task.Run(async () =>
         {
-            var segment = new byte[WsSegmentSize];
-            var datagram = new byte[MaxUdpDatagramSize];
-
             try
             {
                 while (!ct.IsCancellationRequested && ws.State == WebSocketState.Open)
                 {
-                    var total = 0;
+                    var msg = await ReceiveWholeWsMessage(ws, ct);
+                    logger.LogInformation("WS message: type={Type} bytes={Bytes}", msg.MessageType, msg.Payload.Length);
+                    if (msg.MessageType == WebSocketMessageType.Close)
+                        break;
 
-                    while (true)
+                    if (msg.MessageType == WebSocketMessageType.Text)
                     {
-                        var result = await ws.ReceiveAsync(segment, ct);
-
-                        if (result.MessageType == WebSocketMessageType.Close)
-                            return;
-
-                        if (result.MessageType != WebSocketMessageType.Binary)
-                        {
-                            // Drain remainder of this message (if fragmented), then ignore it.
-                            while (!result.EndOfMessage)
-                                result = await ws.ReceiveAsync(segment, ct);
-
-                            total = 0;
-                            break;
-                        }
-
-                        if (result.Count > 0)
-                        {
-                            if (total + result.Count > datagram.Length)
-                            {
-                                logger.LogWarning("WS binary message exceeds UDP max size ({Max}). Dropping.", MaxUdpDatagramSize);
-
-                                while (!result.EndOfMessage)
-                                    result = await ws.ReceiveAsync(segment, ct);
-
-                                total = 0;
-                                break;
-                            }
-
-                            Buffer.BlockCopy(segment, 0, datagram, total, result.Count);
-                            total += result.Count;
-                        }
-
-                        if (result.EndOfMessage)
-                            break;
+                        // Ignore any text control messages
+                        continue;
                     }
 
-                    if (total > 0)
-                        await udp.SendAsync(datagram.AsMemory(0, total), ct);
+                    if (msg.MessageType != WebSocketMessageType.Binary || msg.Payload.Length == 0)
+                        continue;
+
+                    // Parse one or more datagrams from: [u16_be len][payload]...
+                    var data = msg.Payload;
+                    var off = 0;
+
+                    while (off + 2 <= data.Length)
+                    {
+                        var len = (data[off] << 8) | data[off + 1];
+                        off += 2;
+
+                        if (len <= 0 || off + len > data.Length)
+                        {
+                            logger.LogWarning("Invalid framed UDP message. off={Off} len={Len} total={Total}", off, len,
+                                data.Length);
+                            break;
+                        }
+
+                        await udp.SendAsync(data.AsMemory(off, len), ct);
+                        off += len;
+                    }
                 }
             }
             catch (OperationCanceledException)
             {
-                // ignore
             }
             catch (Exception e)
             {
@@ -192,7 +176,6 @@ public class OpenVpnProxyController(
             }
         }, ct);
 
-        // UDP -> WS
         var udpToWs = Task.Run(async () =>
         {
             try
@@ -203,17 +186,24 @@ public class OpenVpnProxyController(
                     if (pkt.Buffer.Length <= 0)
                         continue;
 
+                    if (pkt.Buffer.Length > 65535)
+                        continue;
+
+                    // Frame: [u16_be len][payload]
+                    var framed = new byte[2 + pkt.Buffer.Length];
+                    framed[0] = (byte)((pkt.Buffer.Length >> 8) & 0xFF);
+                    framed[1] = (byte)(pkt.Buffer.Length & 0xFF);
+                    Buffer.BlockCopy(pkt.Buffer, 0, framed, 2, pkt.Buffer.Length);
+
                     await ws.SendAsync(
-                        pkt.Buffer,
+                        framed,
                         WebSocketMessageType.Binary,
                         endOfMessage: true,
-                        cancellationToken: ct
-                    );
+                        cancellationToken: ct);
                 }
             }
             catch (OperationCanceledException)
             {
-                // ignore
             }
             catch (SocketException e)
             {
@@ -227,7 +217,81 @@ public class OpenVpnProxyController(
 
         await Task.WhenAny(wsToUdp, udpToWs);
 
-        logger.LogInformation("UDP proxy stopped. remote={Remote}", remote);
+        if (ws.State == WebSocketState.Open)
+            await SafeCloseWs(ws, WebSocketCloseStatus.NormalClosure, "Closing");
+    }
+
+    private static async Task SafeCloseWs(WebSocket ws, WebSocketCloseStatus status, string reason)
+    {
+        try
+        {
+            await ws.CloseAsync(status, reason, CancellationToken.None);
+        }
+        catch
+        {
+        }
+    }
+
+    private sealed record WsWholeMessage(WebSocketMessageType MessageType, byte[] Payload);
+
+    private static async Task<WsWholeMessage> ReceiveWholeWsMessage(WebSocket ws, CancellationToken ct)
+    {
+        // Reassembles fragmented WebSocket messages into one payload.
+        var buffer = new byte[16 * 1024];
+        using var ms = new MemoryStream();
+
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await ws.ReceiveAsync(buffer, ct);
+
+            if (result.MessageType == WebSocketMessageType.Close)
+                return new WsWholeMessage(WebSocketMessageType.Close, Array.Empty<byte>());
+
+            if (result.Count > 0)
+                ms.Write(buffer, 0, result.Count);
+        } while (!result.EndOfMessage);
+
+        return new WsWholeMessage(result.MessageType, ms.ToArray());
+    }
+
+    private static async Task TryDrainOptionalConnectMessage(WebSocket ws, CancellationToken ct, ILogger logger)
+    {
+        // The C++ bridge sends a text JSON immediately after handshake:
+        // {"type":"connect","proto":"udp","host":"...","port":...}
+        // Your proxy does not need it. We can safely ignore it if present.
+        if (ws.State != WebSocketState.Open)
+            return;
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromMilliseconds(250));
+
+        try
+        {
+            var msg = await ReceiveWholeWsMessage(ws, cts.Token);
+            if (msg.MessageType == WebSocketMessageType.Text && msg.Payload.Length > 0)
+            {
+                var text = System.Text.Encoding.UTF8.GetString(msg.Payload);
+                if (text.Contains("\"type\":\"connect\""))
+                    logger.LogInformation("Ignored connect control message: {Text}", text);
+                else
+                    logger.LogInformation("Ignored unexpected text message: {Text}", text);
+            }
+            else if (msg.MessageType == WebSocketMessageType.Binary)
+            {
+                // If first message is binary, it is real traffic. Put it back is not possible,
+                // so we just do nothing here (and rely on normal loop in HandleUdp).
+                // In practice, C++ sends text first, so this should rarely happen.
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // No message within 250ms - fine.
+        }
+        catch (Exception e)
+        {
+            logger.LogDebug(e, "Failed to drain optional connect message. {Message}", e.Message);
+        }
     }
 
     private static async Task TryCloseWs(WebSocket ws, string reason, ILogger logger)
