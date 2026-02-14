@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using DataGateOpenVpnManager.Services.OpenVpnTelnet;
 using DataGateOpenVpnManager.Services.OpenVpnTelnet.Subscribers;
 using Microsoft.AspNetCore.SignalR;
@@ -81,7 +81,8 @@ public class OpenVpnSignalHub(
         catch (Exception ex)
         {
             logger.LogError(ex, "SendCommand failed for {ConnectionId}", Context.ConnectionId);
-            throw;
+            // Rethrow only the message so SignalR does not try to serialize Exception (e.g. IntPtr in WaitHandle)
+            throw new HubException(ex.Message);
         }
     }
 
@@ -99,7 +100,8 @@ public class OpenVpnSignalHub(
         {
             logger.LogError(ex, "SendCommandWithRequestId failed for {ConnectionId}, RequestId={RequestId}",
                 Context.ConnectionId, requestId);
-            throw;
+            // Rethrow only the message so SignalR does not try to serialize Exception (e.g. IntPtr in WaitHandle)
+            throw new HubException(ex.Message);
         }
     }
 }
