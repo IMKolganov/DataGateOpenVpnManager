@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using DataGateOpenVpnManager.Hubs;
 
 namespace DataGateOpenVpnManager.Configurations;
@@ -36,35 +36,10 @@ public static class PipelineConfiguration
         app.MapGet("/error/404", () => Results.Problem(statusCode: 404, title: "Page Not Found",
                 detail: "The requested resource was not found."))
             .ExcludeFromDescription();
+        app.MapGet("/", () => Results.Redirect("/api/info")).ExcludeFromDescription();
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown version";
         var environmentName = app.Environment.EnvironmentName;
-
-        app.MapGet("/", (IConfiguration config) => Results.Json(new
-        {
-            version,
-            environment = environmentName,
-            application = "DataGateOpenVpnManager",
-            description = "This service manages OpenVPN certificates and provides a JSON API for operations like create/revoke.",
-            config = new
-            {
-                dns1 = config["DNS1"],
-                dns2 = config["DNS2"],
-                vpnSubnet = config["VPN_SUBNET"],
-                vpnNetmask = config["VPN_NETMASK"],
-                easyRsaPath = config["EASY_RSA_PATH"],
-                dataDir = config["DATA_DIR"],
-                port = config["PORT"],
-                apiPort = config["API_PORT"],
-                proto = config["PROTO"],
-                openVpnManagement = new
-                {
-                    host = config["OpenVpnManagement:Host"],
-                    port = config["OpenVpnManagement:Port"]
-                },
-                backendBaseUrl = config["BACKEND__BASEURL"]
-            }
-        }));
         app.Logger.LogInformation($"Application version: {version}; Environment: {environmentName};");
         
         //SignalR
