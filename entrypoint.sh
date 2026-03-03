@@ -13,6 +13,7 @@ VPN_SUBNET=${VPN_SUBNET:-10.51.28.0}
 VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 TUN_IF="${TUN_IF:-tun0}"
 WAN_IF="${WAN_IF:-eth0}"
+DCO="${DCO:-false}"
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_SOURCE="/scripts"
@@ -106,10 +107,17 @@ done
 
 # Generate default server.conf if not present
 echo "Generating server.conf from environment..."
+# DCO=false (default) -> disable-dco in config; DCO=true -> DCO enabled, no disable-dco
+if [ "$DCO" = "true" ] || [ "$DCO" = "1" ] || [ "$DCO" = "yes" ]; then
+  DCO_OPTION=""
+else
+  DCO_OPTION="disable-dco"
+fi
 cat <<EOF > "$DATA_DIR/server.conf"
 port $PORT
 proto $PROTO
 dev tun
+$DCO_OPTION
 
 ca /etc/openvpn/ca.crt
 cert /etc/openvpn/server.crt

@@ -7,10 +7,7 @@ namespace DataGateOpenVpnManager.Controllers;
 
 [ApiController]
 [Route("api/proxy")]
-public class OpenVpnProxyController(
-    IConfiguration config,
-    ILogger<OpenVpnProxyController> logger)
-    : ControllerBase
+public class OpenVpnProxyController(IConfiguration config, ILogger<OpenVpnProxyController> logger) : ControllerBase
 {
     private const int MaxUdpDatagramSize = 64 * 1024;
     private const int WsSegmentSize = 16 * 1024;

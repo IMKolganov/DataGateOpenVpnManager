@@ -81,7 +81,7 @@ tail -n0 "$TAIL_OPT" "$LOG_FILE" | while IFS= read -r line; do
   cn="$(extract_cn "$line")"
   peer="$(extract_peer "$line")"
 
-  # dedupe key: server + type + peer + CN (на 5 сек)
+  # dedupe key: server + type + peer + CN (5 sec)
   key="${VPN_SERVER_ID}|${et}|${peer}|${cn}"
   if ! should_send "$key"; then
     continue

@@ -40,7 +40,7 @@ fi
 real_addr="$(sanitize "${untrusted_ip:-}:${untrusted_port:-}")"
 cn_s="$(sanitize "$cn")"
 
-# Send event (non-blocking, even if CN empty — это просто телеметрия)
+# Send event (non-blocking, even if CN empty - telemetry only)
 post_bg "$(cat <<JSON
 {
   "EventType": "TlsVerified",
