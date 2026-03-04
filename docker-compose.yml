@@ -1,0 +1,38 @@
+services:
+  openvpn-udp:
+    image: imkolganov/openvpn-gate-monitor-openvpn:latest
+    pull_policy: always
+    container_name: openvpn-udp
+    restart: unless-stopped
+    networks:
+      - openvpn_network
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - "/dev/net/tun:/dev/net/tun"
+    volumes:
+      - ./data/openvpn_udp:/openvpn-udp
+    ports:
+      - "1295:1295/udp"
+      - "5009:5009"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      EASY_RSA_PATH: "/openvpn-udp/easy-rsa"
+      DATA_DIR: /openvpn-udp
+      PORT: "1295"
+      API_PORT: 5009
+      PROTO: udp
+      OpenVpnManagement__Port: "5095"
+      OpenVpnManagement__Host: "localhost"
+      BACKEND__BASEURL: "http://localhost:5581/"
+      WAN_IF: eth0
+      VPN_SUBNET: "10.50.28.0"
+      VPN_NETMASK: "255.255.255.0"
+
+
+networks:
+  openvpn_network:
+    driver: bridge
+
+volumes:
+  openvpn_data_main_udp:

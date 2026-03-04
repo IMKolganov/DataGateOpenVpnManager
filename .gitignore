@@ -422,8 +422,10 @@ appsettings.Development.json
 NuGet.config
 elasticsearch.json
 dashboardapi.json
+*.pem
 
 # Ignore generated SSL certificate and key files
 *.crt
 *.key
 *.cnf
+data
