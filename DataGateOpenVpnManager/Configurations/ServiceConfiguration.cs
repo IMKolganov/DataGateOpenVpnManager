@@ -1,4 +1,4 @@
-﻿using System.Threading.RateLimiting;
+using System.Threading.RateLimiting;
 using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services;
 using DataGateOpenVpnManager.Services.EasyRsaServices;
@@ -53,6 +53,8 @@ public static class ServiceConfiguration
         });
 
         services.AddHostedService<MicroserviceJwtValidatorInitializer>();
+
+        services.ConfigureProxy(config);
 
         services.AddControllers();
         services.AddEndpointsApiExplorer();
