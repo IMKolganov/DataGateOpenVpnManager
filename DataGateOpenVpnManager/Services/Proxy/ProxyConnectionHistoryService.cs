@@ -1,5 +1,5 @@
-﻿using System.Collections.Concurrent;
-using DataGateOpenVpnManager.Models.Proxy;
+using System.Collections.Concurrent;
+using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 
 namespace DataGateOpenVpnManager.Services.Proxy;
 
