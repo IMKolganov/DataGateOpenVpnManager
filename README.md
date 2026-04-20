@@ -106,7 +106,7 @@ Log files in `$DATA_DIR`:
 ```yaml
 services:
   openvpn_udp:
-    image: imkolganov/openvpn-gate-monitor-openvpn:latest
+    image: imkolganov/datagate-monitor-openvpn:latest
     pull_policy: always
     container_name: openvpn_udp
     restart: unless-stopped
