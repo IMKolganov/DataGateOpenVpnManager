@@ -1,7 +1,7 @@
 ﻿using System.Globalization;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
-using OpenVPNGateMonitor.SharedModels.Enums;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using DataGateMonitor.SharedModels.Enums;
 
 namespace DataGateOpenVpnManager.Services.EasyRsaServices;
 

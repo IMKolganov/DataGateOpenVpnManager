@@ -1,8 +1,8 @@
 ﻿using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Requests;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 
 namespace DataGateOpenVpnManager.Controllers;
 

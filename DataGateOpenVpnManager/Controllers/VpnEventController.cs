@@ -1,7 +1,7 @@
 ﻿using DataGateOpenVpnManager.Hubs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.VpnEvent.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.VpnEvent.Requests;
 
 namespace DataGateOpenVpnManager.Controllers;
 

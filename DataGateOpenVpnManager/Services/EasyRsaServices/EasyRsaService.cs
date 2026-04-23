@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using DataGateOpenVpnManager.Services.Interfaces;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 
 namespace DataGateOpenVpnManager.Services.EasyRsaServices;
 

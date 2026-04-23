@@ -1,6 +1,6 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Info;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Info;
 
 namespace DataGateOpenVpnManager.Controllers;
 

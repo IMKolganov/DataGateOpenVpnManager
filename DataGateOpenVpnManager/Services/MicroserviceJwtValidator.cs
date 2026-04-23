@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.IdentityModel.Tokens;
-using OpenVPNGateMonitor.SharedModels.Responses;
+using DataGateMonitor.SharedModels.Responses;
 
 namespace DataGateOpenVpnManager.Services;
 
