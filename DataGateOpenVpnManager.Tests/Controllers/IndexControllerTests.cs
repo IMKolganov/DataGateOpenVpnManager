@@ -21,7 +21,7 @@ public class IndexControllerTests
     }
 
     [Fact]
-    public async Task Get_ReturnsOk_WithRootInfoResponse()
+    public async Task Get_ReturnsOk_WithRootOpenVpnInfoResponse()
     {
         var configData = new Dictionary<string, string?>
         {
@@ -45,7 +45,7 @@ public class IndexControllerTests
         var result = await controller.Get(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<RootInfoResponse>(okResult.Value);
+        var response = Assert.IsType<RootOpenVpnInfoResponse>(okResult.Value);
         Assert.Equal("DataGateOpenVpnManager", response.Application);
         Assert.Equal("Testing", response.Environment);
         Assert.NotNull(response.Version);
@@ -64,7 +64,7 @@ public class IndexControllerTests
         var result = await controller.Get(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<RootInfoResponse>(okResult.Value);
+        var response = Assert.IsType<RootOpenVpnInfoResponse>(okResult.Value);
         Assert.NotNull(response.Config);
     }
 }
