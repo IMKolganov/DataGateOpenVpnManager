@@ -1,4 +1,4 @@
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 
 namespace DataGateOpenVpnManager.Services.Proxy;
 

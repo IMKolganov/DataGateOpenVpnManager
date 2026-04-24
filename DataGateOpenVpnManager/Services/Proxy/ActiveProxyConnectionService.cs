@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 
 namespace DataGateOpenVpnManager.Services.Proxy;
 

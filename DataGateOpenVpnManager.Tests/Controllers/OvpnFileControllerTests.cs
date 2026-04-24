@@ -4,8 +4,8 @@ using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Requests;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 
 namespace DataGateOpenVpnManager.Tests.Controllers;
 

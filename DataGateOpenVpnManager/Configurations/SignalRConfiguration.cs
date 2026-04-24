@@ -1,5 +1,5 @@
 ﻿using DataGateOpenVpnManager.Hubs;
-using DataGateOpenVpnManager.Models;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.OpenVpnTelnet;
 using Microsoft.Extensions.Options;
 

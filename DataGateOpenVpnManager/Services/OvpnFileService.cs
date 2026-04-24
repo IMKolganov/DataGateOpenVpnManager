@@ -1,6 +1,6 @@
 ﻿using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 
 namespace DataGateOpenVpnManager.Services;
 

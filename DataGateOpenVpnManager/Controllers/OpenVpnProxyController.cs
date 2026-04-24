@@ -2,10 +2,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
 using DataGateOpenVpnManager.Services.Proxy;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Requests;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Responses;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataGateOpenVpnManager.Controllers;

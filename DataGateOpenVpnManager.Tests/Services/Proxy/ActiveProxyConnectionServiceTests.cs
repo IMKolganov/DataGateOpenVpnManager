@@ -1,6 +1,6 @@
 using DataGateOpenVpnManager.Services.Proxy;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
 
 namespace DataGateOpenVpnManager.Tests.Services.Proxy;
 

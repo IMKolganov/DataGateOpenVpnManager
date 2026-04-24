@@ -1,4 +1,4 @@
-﻿using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+﻿using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 
 namespace DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 
