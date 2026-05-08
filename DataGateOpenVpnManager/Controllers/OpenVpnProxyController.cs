@@ -16,7 +16,9 @@ public class OpenVpnProxyController(
     IConfiguration config,
     ILogger<OpenVpnProxyController> logger,
     IActiveProxyConnectionService activeProxyConnections,
-    IProxyConnectionHistoryService proxyConnectionHistory) : ControllerBase
+    IProxyConnectionHistoryService proxyConnectionHistory,
+    IProxyTrafficFlowService proxyTrafficFlow,
+    IProxyConnectionIdentityResolver identityResolver) : ControllerBase
 {
     private const int MaxUdpDatagramSize = 64 * 1024;
     private const int WsSegmentSize = 16 * 1024;
@@ -56,7 +58,7 @@ public class OpenVpnProxyController(
         };
 
     [HttpGet]
-    public async Task Get([FromQuery] string? mode = null)
+    public async Task Get([FromQuery] string? mode = null, [FromQuery] string? clientRef = null)
     {
         if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
@@ -82,14 +84,15 @@ public class OpenVpnProxyController(
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         var modeNorm = (mode ?? "tcp").Trim().ToLowerInvariant();
+        var identity = identityResolver.Resolve(HttpContext, clientRef);
         var connectionId = Guid.NewGuid().ToString("N");
 
         try
         {
             if (modeNorm == "udp")
-                await HandleUdp(ws, targetIp, vpnPort, linkedCts.Token, logger, connectionId);
+                await HandleUdp(ws, targetIp, vpnPort, linkedCts.Token, logger, connectionId, identity);
             else
-                await HandleTcp(ws, targetHost, vpnPort, linkedCts.Token, logger, connectionId);
+                await HandleTcp(ws, targetHost, vpnPort, linkedCts.Token, logger, connectionId, identity);
         }
         catch (OperationCanceledException)
         {
@@ -117,7 +120,8 @@ public class OpenVpnProxyController(
         int vpnPort,
         CancellationToken ct,
         ILogger logger,
-        string connectionId)
+        string connectionId,
+        ProxyConnectionIdentity? identity)
     {
         using var tcp = new TcpClient();
         tcp.NoDelay = true;
@@ -129,21 +133,21 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogError(e, "TCP connect failed. {Host}:{Port}. {Message}", targetHost, vpnPort, e.Message);
-            RecordConnectFailed(connectionId, ProxyConnectionProtocol.Tcp, targetHost, vpnPort, e.Message);
+            RecordConnectFailed(connectionId, ProxyConnectionProtocol.Tcp, targetHost, vpnPort, e.Message, identity);
             await TryCloseWs(ws, "TCP connect failed", logger);
             return;
         }
 
         var localEp = (IPEndPoint)tcp.Client.LocalEndPoint!;
         var remoteEp = (IPEndPoint)tcp.Client.RemoteEndPoint!;
-        RegisterActiveConnection(connectionId, ProxyConnectionProtocol.Tcp, localEp, remoteEp);
+        RegisterActiveConnection(connectionId, ProxyConnectionProtocol.Tcp, localEp, remoteEp, identity);
 
         try
         {
             await using var tcpStream = tcp.GetStream();
 
-            var wsToTcp = PumpWebSocketToTcp(ws, tcpStream, ct, logger);
-            var tcpToWs = PumpTcpToWebSocket(ws, tcpStream, ct, logger);
+            var wsToTcp = PumpWebSocketToTcp(ws, tcpStream, ct, logger, connectionId, proxyTrafficFlow);
+            var tcpToWs = PumpTcpToWebSocket(ws, tcpStream, ct, logger, connectionId, proxyTrafficFlow);
 
             await Task.WhenAny(wsToTcp, tcpToWs);
         }
@@ -159,7 +163,8 @@ public class OpenVpnProxyController(
         int vpnPort,
         CancellationToken ct,
         ILogger logger,
-        string connectionId)
+        string connectionId,
+        ProxyConnectionIdentity? identity)
     {
         var remote = new IPEndPoint(targetIp, vpnPort);
 
@@ -172,14 +177,14 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogError(e, "UDP connect failed. {Host}:{Port}. {Message}", remote.Address, remote.Port, e.Message);
-            RecordConnectFailed(connectionId, ProxyConnectionProtocol.Udp, remote.Address.ToString(), remote.Port, e.Message);
+            RecordConnectFailed(connectionId, ProxyConnectionProtocol.Udp, remote.Address.ToString(), remote.Port, e.Message, identity);
             if (ws.State == WebSocketState.Open)
                 await SafeCloseWs(ws, WebSocketCloseStatus.InternalServerError, "UDP connect failed");
             return;
         }
 
         var localEp = (IPEndPoint)udp.Client.LocalEndPoint!;
-        RegisterActiveConnection(connectionId, ProxyConnectionProtocol.Udp, localEp, remote);
+        RegisterActiveConnection(connectionId, ProxyConnectionProtocol.Udp, localEp, remote, identity);
 
         // Optional: read and ignore app-level "connect" JSON message (text)
         // Your C++ bridge sends it right after handshake.
@@ -224,6 +229,7 @@ public class OpenVpnProxyController(
                             }
 
                             await udp.SendAsync(data.AsMemory(off, len), ct);
+                            proxyTrafficFlow.RecordTraffic(connectionId, ProxyTrafficFlowDirection.ClientToServer, len);
                             off += len;
                         }
                     }
@@ -261,6 +267,7 @@ public class OpenVpnProxyController(
                             WebSocketMessageType.Binary,
                             endOfMessage: true,
                             cancellationToken: ct);
+                        proxyTrafficFlow.RecordTraffic(connectionId, ProxyTrafficFlowDirection.ServerToClient, pkt.Buffer.Length);
                     }
                 }
                 catch (OperationCanceledException)
@@ -291,7 +298,8 @@ public class OpenVpnProxyController(
         string connectionId,
         ProxyConnectionProtocol protocol,
         IPEndPoint localEp,
-        IPEndPoint remoteTargetEp)
+        IPEndPoint remoteTargetEp,
+        ProxyConnectionIdentity? identity)
     {
         var (clientIp, clientPort) = GetHttpClientAddress();
         var connection = new ActiveProxyConnection
@@ -308,6 +316,7 @@ public class OpenVpnProxyController(
         };
 
         activeProxyConnections.Add(connection);
+        proxyTrafficFlow.RegisterConnection(connection, identity);
 
         proxyConnectionHistory.Add(new ProxyConnectionHistoryItem
         {
@@ -329,10 +338,12 @@ public class OpenVpnProxyController(
         if (!activeProxyConnections.TryGet(connectionId, out var conn) || conn is null)
         {
             activeProxyConnections.Remove(connectionId);
+            proxyTrafficFlow.UnregisterConnection(connectionId);
             return;
         }
 
         activeProxyConnections.Remove(connectionId);
+        proxyTrafficFlow.UnregisterConnection(connectionId);
 
         proxyConnectionHistory.Add(new ProxyConnectionHistoryItem
         {
@@ -354,9 +365,11 @@ public class OpenVpnProxyController(
         ProxyConnectionProtocol protocol,
         string targetIp,
         int targetPort,
-        string errorMessage)
+        string errorMessage,
+        ProxyConnectionIdentity? identity)
     {
         var (clientIp, clientPort) = GetHttpClientAddress();
+        proxyTrafficFlow.RegisterConnectFailed(connectionId, protocol, clientIp, clientPort, identity, targetIp, targetPort, errorMessage);
         proxyConnectionHistory.Add(new ProxyConnectionHistoryItem
         {
             ConnectionId = connectionId,
@@ -481,7 +494,9 @@ public class OpenVpnProxyController(
         WebSocket ws,
         NetworkStream tcp,
         CancellationToken ct,
-        ILogger logger)
+        ILogger logger,
+        string connectionId,
+        IProxyTrafficFlowService proxyTrafficFlow)
     {
         var buffer = new byte[16 * 1024];
 
@@ -498,6 +513,7 @@ public class OpenVpnProxyController(
                     continue;
 
                 await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
+                proxyTrafficFlow.RecordTraffic(connectionId, ProxyTrafficFlowDirection.ClientToServer, result.Count);
 
                 while (!result.EndOfMessage)
                 {
@@ -506,6 +522,7 @@ public class OpenVpnProxyController(
                         break;
 
                     await tcp.WriteAsync(buffer.AsMemory(0, result.Count), ct);
+                    proxyTrafficFlow.RecordTraffic(connectionId, ProxyTrafficFlowDirection.ClientToServer, result.Count);
                 }
 
                 // NetworkStream flush is typically unnecessary and may hurt throughput/latency.
@@ -526,7 +543,9 @@ public class OpenVpnProxyController(
         WebSocket ws,
         NetworkStream tcp,
         CancellationToken ct,
-        ILogger logger)
+        ILogger logger,
+        string connectionId,
+        IProxyTrafficFlowService proxyTrafficFlow)
     {
         var buffer = new byte[16 * 1024];
 
@@ -544,6 +563,7 @@ public class OpenVpnProxyController(
                     endOfMessage: true,
                     cancellationToken: ct
                 );
+                proxyTrafficFlow.RecordTraffic(connectionId, ProxyTrafficFlowDirection.ServerToClient, read);
             }
         }
         catch (OperationCanceledException ex)

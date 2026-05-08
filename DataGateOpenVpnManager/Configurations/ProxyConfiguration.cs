@@ -8,5 +8,8 @@ public static class ProxyConfiguration
     {
         services.AddSingleton<IProxyConnectionHistoryService, ProxyConnectionHistoryService>();
         services.AddSingleton<IActiveProxyConnectionService, ActiveProxyConnectionService>();
+        services.AddSingleton<IProxyConnectionIdentityResolver, ProxyConnectionIdentityResolver>();
+        services.AddSingleton<IProxyTrafficFlowService, ProxyTrafficFlowService>();
+        services.AddHostedService<ProxyTrafficFlowBroadcastService>();
     }
 }
