@@ -22,10 +22,16 @@ public class JwtValidationMiddleware(RequestDelegate next)
     public async Task Invoke(HttpContext context, IMicroserviceJwtValidator validator)
     {
         var requestPath = context.Request.Path;
+        var token = ExtractToken(context);
 
         // Allow unauthenticated access to Swagger and other excluded paths
         if (ExcludedPaths.Any(p => requestPath.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
         {
+            // For excluded paths we still attach principal when token is provided,
+            // so endpoints like /api/proxy can enrich telemetry with user identity.
+            if (!string.IsNullOrWhiteSpace(token) && validator.ValidateToken(token, out var excludedPrincipal))
+                context.User = excludedPrincipal ?? throw new InvalidOperationException("Principal is null");
+
             await next(context);
             return;
         }
@@ -39,20 +45,6 @@ public class JwtValidationMiddleware(RequestDelegate next)
             return;
         }
 
-        // Attempt to extract token from Authorization header
-        string? token = null;
-        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
-        if (authHeader?.StartsWith("Bearer ") == true)
-        {
-            token = authHeader.Substring("Bearer ".Length);
-        }
-
-        // Fallback: check query string for access_token (e.g., for WebSocket auth)
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            token = context.Request.Query["access_token"];
-        }
-
         // Validate token
         if (!string.IsNullOrWhiteSpace(token) && validator.ValidateToken(token, out var principal))
         {
@@ -64,5 +56,15 @@ public class JwtValidationMiddleware(RequestDelegate next)
         // Reject request if no valid token is found and not allowed by IP/path
         context.Response.StatusCode = 401;
         await context.Response.WriteAsync("Unauthorized");
+    }
+
+    private static string? ExtractToken(HttpContext context)
+    {
+        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+        if (authHeader?.StartsWith("Bearer ") == true)
+            return authHeader.Substring("Bearer ".Length);
+
+        var token = context.Request.Query["access_token"];
+        return string.IsNullOrWhiteSpace(token) ? null : token.ToString();
     }
 }

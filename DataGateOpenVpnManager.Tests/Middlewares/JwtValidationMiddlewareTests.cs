@@ -55,6 +55,23 @@ public class JwtValidationMiddlewareTests
         Assert.True(nextCalled);
     }
 
+    [Fact]
+    public async Task Invoke_WhenPathIsExcludedAndBearerTokenValid_AttachesPrincipal()
+    {
+        var nextCalled = false;
+        RequestDelegate next = _ => { nextCalled = true; return Task.CompletedTask; };
+        ClaimsPrincipal? principal = new ClaimsPrincipal(new ClaimsIdentity("Test"));
+        var validatorMock = new Mock<IMicroserviceJwtValidator>();
+        validatorMock.Setup(v => v.ValidateToken("valid-token", out principal)).Returns(true);
+        var middleware = new JwtValidationMiddleware(next);
+
+        var context = CreateContext("/api/proxy", authHeader: "Bearer valid-token");
+        await middleware.Invoke(context, validatorMock.Object);
+
+        Assert.True(nextCalled);
+        Assert.Equal(principal, context.User);
+    }
+
     [Theory]
     [InlineData("/api/vpn-events/connect")]
     [InlineData("/api/vpn-events/disconnect")]

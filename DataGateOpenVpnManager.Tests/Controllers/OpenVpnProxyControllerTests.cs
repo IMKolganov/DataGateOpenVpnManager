@@ -15,12 +15,16 @@ public class OpenVpnProxyControllerTests
 {
     private static OpenVpnProxyController CreateController(
         IActiveProxyConnectionService active,
-        IProxyConnectionHistoryService? history = null)
+        IProxyConnectionHistoryService? history = null,
+        IProxyTrafficFlowService? trafficFlow = null,
+        IProxyConnectionIdentityResolver? identityResolver = null)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
         var logger = new Mock<ILogger<OpenVpnProxyController>>();
         history ??= new Mock<IProxyConnectionHistoryService>().Object;
-        return new OpenVpnProxyController(config, logger.Object, active, history);
+        trafficFlow ??= new Mock<IProxyTrafficFlowService>().Object;
+        identityResolver ??= new Mock<IProxyConnectionIdentityResolver>().Object;
+        return new OpenVpnProxyController(config, logger.Object, active, history, trafficFlow, identityResolver);
     }
 
     [Fact]

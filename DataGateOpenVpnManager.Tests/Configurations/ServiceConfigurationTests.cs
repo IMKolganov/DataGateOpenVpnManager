@@ -86,8 +86,16 @@ public class ServiceConfigurationTests
         var active2 = provider.GetRequiredService<IActiveProxyConnectionService>();
         Assert.Same(active1, active2);
 
+        var identity1 = provider.GetRequiredService<IProxyConnectionIdentityResolver>();
+        var identity2 = provider.GetRequiredService<IProxyConnectionIdentityResolver>();
+        Assert.Same(identity1, identity2);
+
         var history1 = provider.GetRequiredService<IProxyConnectionHistoryService>();
         var history2 = provider.GetRequiredService<IProxyConnectionHistoryService>();
         Assert.Same(history1, history2);
+
+        var flow1 = provider.GetRequiredService<IProxyTrafficFlowService>();
+        var flow2 = provider.GetRequiredService<IProxyTrafficFlowService>();
+        Assert.Same(flow1, flow2);
     }
 }
