@@ -6,6 +6,7 @@ using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Requests;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Responses;
+using DataGateMonitor.SharedModels.Responses;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DataGateOpenVpnManager.Controllers;
@@ -28,18 +29,21 @@ public class OpenVpnProxyController(
     /// that the proxy uses toward OpenVPN (127.0.0.1:vpnPort). The dashboard often only sees loopback.
     /// </summary>
     [HttpGet("client/by-local-port")]
-    public ActionResult<ProxyClientLookupResponse> GetClientByLocalPort([FromQuery] GetProxyClientByLocalPortRequest request)
+    public ActionResult<ApiResponse<ProxyClientLookupResponse>> GetClientByLocalPort([FromQuery] GetProxyClientByLocalPortRequest request)
     {
         if (request.LocalPort is < 1 or > 65535)
-            return BadRequest();
+            return BadRequest(ApiResponse<ProxyClientLookupResponse>.ErrorResponse(
+                "Local port must be between 1 and 65535."));
 
         var host = string.IsNullOrWhiteSpace(request.Host) ? "localhost" : request.Host;
         var conn = activeProxyConnections.TryGetByLocalProxy(request.LocalPort, host);
         if (conn is null)
-            return NotFound();
+            return NotFound(ApiResponse<ProxyClientLookupResponse>.ErrorResponse(
+                "No active proxy session for the given local port."));
 
         var hostNormalized = ActiveProxyConnectionService.NormalizeHost(host);
-        return Ok(MapToProxyClientLookupResponse(conn, hostNormalized));
+        return Ok(ApiResponse<ProxyClientLookupResponse>.SuccessResponse(
+            MapToProxyClientLookupResponse(conn, hostNormalized)));
     }
 
     private static ProxyClientLookupResponse MapToProxyClientLookupResponse(ActiveProxyConnection c, string hostNormalized) =>

@@ -56,7 +56,7 @@ public static class ServiceConfiguration
 
         services.ConfigureProxy(config);
 
-        services.AddControllers();
+        services.AddControllers().AddNewtonsoftJson();
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
     }
