@@ -70,7 +70,7 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
             }
             else
             {
-                _logger.LogWarning("[CommandQueue] No pending command found, adding to queue.");
+                _logger.LogDebug("[CommandQueue] No pending command found, adding to queue.");
                 _messageQueue.Enqueue(trimmed);
                 NotifySubscribers(trimmed, cancellationToken);
             }
