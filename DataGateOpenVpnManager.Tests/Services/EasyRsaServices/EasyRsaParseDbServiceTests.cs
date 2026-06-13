@@ -2,8 +2,8 @@ using DataGateOpenVpnManager.Services.EasyRsaServices;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.Extensions.Logging;
 using Moq;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
-using OpenVPNGateMonitor.SharedModels.Enums;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using DataGateMonitor.SharedModels.Enums;
 
 namespace DataGateOpenVpnManager.Tests.Services.EasyRsaServices;
 

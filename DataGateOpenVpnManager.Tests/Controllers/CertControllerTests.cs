@@ -4,8 +4,9 @@ using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Requests;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using DataGateMonitor.SharedModels.Responses;
 
 namespace DataGateOpenVpnManager.Tests.Controllers;
 
@@ -32,9 +33,11 @@ public class CertControllerTests
         var result = await controller.GetAllCertificates(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var list = Assert.IsAssignableFrom<List<ServerCertificate>>(okResult.Value);
-        Assert.Single(list);
-        Assert.Equal("client1", list[0].CommonName);
+        var wrapped = Assert.IsType<ApiResponse<List<ServerCertificate>>>(okResult.Value);
+        Assert.True(wrapped.Success);
+        Assert.NotNull(wrapped.Data);
+        Assert.Single(wrapped.Data);
+        Assert.Equal("client1", wrapped.Data[0].CommonName);
     }
 
     [Fact]
@@ -50,7 +53,8 @@ public class CertControllerTests
         var result = await controller.GetAllCertificates(CancellationToken.None);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
-        Assert.NotNull(badRequest.Value);
+        var wrapped = Assert.IsType<ApiResponse<List<ServerCertificate>>>(badRequest.Value);
+        Assert.False(wrapped.Success);
     }
 
     [Fact]
@@ -72,8 +76,9 @@ public class CertControllerTests
         var result = await controller.AddServerCertificate(request, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var cert = Assert.IsType<ServerCertificate>(okResult.Value);
-        Assert.Equal("newclient", cert.CommonName);
+        var wrapped = Assert.IsType<ApiResponse<ServerCertificate>>(okResult.Value);
+        Assert.True(wrapped.Success);
+        Assert.Equal("newclient", wrapped.Data!.CommonName);
     }
 
     [Fact]
@@ -108,6 +113,8 @@ public class CertControllerTests
         var result = await controller.RevokeCertificate(request, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Equal(revokeResult, okResult.Value);
+        var wrapped = Assert.IsType<ApiResponse<ServerCertificate>>(okResult.Value);
+        Assert.True(wrapped.Success);
+        Assert.Equal(revokeResult.CommonName, wrapped.Data!.CommonName);
     }
 }

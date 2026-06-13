@@ -1,0 +1,15 @@
+using DataGateOpenVpnManager.Services.Proxy;
+
+namespace DataGateOpenVpnManager.Configurations;
+
+public static class ProxyConfiguration
+{
+    public static void ConfigureProxy(this IServiceCollection services, IConfiguration config)
+    {
+        services.AddSingleton<IProxyConnectionHistoryService, ProxyConnectionHistoryService>();
+        services.AddSingleton<IActiveProxyConnectionService, ActiveProxyConnectionService>();
+        services.AddSingleton<IProxyConnectionIdentityResolver, ProxyConnectionIdentityResolver>();
+        services.AddSingleton<IProxyTrafficFlowService, ProxyTrafficFlowService>();
+        services.AddHostedService<ProxyTrafficFlowBroadcastService>();
+    }
+}

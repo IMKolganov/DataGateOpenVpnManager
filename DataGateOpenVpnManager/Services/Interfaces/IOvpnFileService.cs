@@ -1,5 +1,5 @@
 ﻿
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 
 namespace DataGateOpenVpnManager.Services.Interfaces;
 

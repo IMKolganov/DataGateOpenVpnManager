@@ -1,4 +1,4 @@
-using DataGateOpenVpnManager.Models;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Models;
 
 namespace DataGateOpenVpnManager.Tests.Models;
 

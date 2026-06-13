@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Mvc;
-using OpenVPNGateMonitor.SharedModels.DataGateOpenVpnManager.Info;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Info;
+using DataGateMonitor.SharedModels.Responses;
 
 namespace DataGateOpenVpnManager.Controllers;
 
@@ -13,12 +14,12 @@ public class IndexController(
     : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<RootInfoResponse>> Get(CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<RootOpenVpnInfoResponse>>> Get(CancellationToken cancellationToken)
     {
         try
         {
             var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown version";
-            var response = new RootInfoResponse
+            var response = new RootOpenVpnInfoResponse
             {
                 Version = version,
                 Environment = env.EnvironmentName,
@@ -43,12 +44,12 @@ public class IndexController(
                     BackendBaseUrl = config["BACKEND__BASEURL"]
                 }
             };
-            return Ok(response);
+            return Ok(ApiResponse<RootOpenVpnInfoResponse>.SuccessResponse(response));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error getting info");
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(ApiResponse<RootOpenVpnInfoResponse>.ErrorResponse(ex.Message));
         }
     }
 }

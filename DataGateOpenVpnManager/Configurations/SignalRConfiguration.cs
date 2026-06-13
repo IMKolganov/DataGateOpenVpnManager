@@ -1,5 +1,6 @@
 ﻿using DataGateOpenVpnManager.Hubs;
-using DataGateOpenVpnManager.Models;
+using DataGateMonitor.Serialization;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.OpenVpnTelnet;
 using Microsoft.Extensions.Options;
 
@@ -22,6 +23,7 @@ public static class SignalRConfiguration
 
         services.AddSingleton<OpenVpnManagementSignalService>();
         services.AddSingleton<HubConnectionTracker>(); 
-        services.AddSignalR();
+        services.AddSignalR()
+            .AddNewtonsoftJsonProtocol(options => options.PayloadSerializerSettings = ProjectJson.WebSettings);
     }
 }
