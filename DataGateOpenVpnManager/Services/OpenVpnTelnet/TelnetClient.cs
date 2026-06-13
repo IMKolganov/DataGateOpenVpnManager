@@ -92,10 +92,7 @@ public class TelnetClient(string host, int port, ILogger<TelnetClient> logger) :
                 response.Append(buffer, 0, bytesRead);
                 string message = response.ToString();
 
-                if (message.Contains("END") || message.Contains("SUCCESS:", StringComparison.OrdinalIgnoreCase)
-                    || message.Contains("ERROR:", StringComparison.OrdinalIgnoreCase)
-                    || message.Contains("NOTIFY:", StringComparison.OrdinalIgnoreCase)
-                    || message.Contains("NOTICE:", StringComparison.OrdinalIgnoreCase))
+                if (OpenVpnManagementMessageCompletion.IsComplete(message))
                 {
                     OnDataReceived.Invoke(message.Trim());
                     response.Clear();

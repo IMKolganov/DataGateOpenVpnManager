@@ -5,8 +5,8 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
-        <AssemblyVersion>1.2.5.57</AssemblyVersion>
-        <FileVersion>1.2.5.57</FileVersion>
+        <AssemblyVersion>1.2.5.58</AssemblyVersion>
+        <FileVersion>1.2.5.58</FileVersion>
         <RootNamespace>DataGateOpenVpnManager</RootNamespace>
     </PropertyGroup>
 
