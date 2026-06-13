@@ -2,8 +2,9 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using DataGateOpenVpnManager.Services.Interfaces;
-using Microsoft.IdentityModel.Tokens;
+using DataGateMonitor.Serialization;
 using DataGateMonitor.SharedModels.Responses;
+using Microsoft.IdentityModel.Tokens;
 
 namespace DataGateOpenVpnManager.Services;
 
@@ -25,7 +26,9 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
             {
                 logger.LogInformation("🔐 Attempt to fetch public key from backend with pin {Pin}...", pin);
 
-                var response = await httpClient.GetFromJsonAsync<ApiResponse<string>>($"api/Auth/public-key/{pin}");
+                var httpResponse = await httpClient.GetAsync($"api/Auth/public-key/{pin}");
+                var json = await httpResponse.Content.ReadAsStringAsync();
+                var response = ProjectJson.Deserialize<ApiResponse<string>>(json);
 
                 if (response is { Success: true, Data: not null })
                 {

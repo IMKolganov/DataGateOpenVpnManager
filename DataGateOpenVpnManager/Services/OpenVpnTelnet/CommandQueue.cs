@@ -57,11 +57,7 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
 
         var trimmed = message.Trim();
 
-        if (trimmed.Contains("END", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("SUCCESS:", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("ERROR:", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("NOTIFY:", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Contains("NOTICE:", StringComparison.OrdinalIgnoreCase))
+        if (OpenVpnManagementMessageCompletion.IsComplete(trimmed))
         {
             if (_pendingCommands.TryDequeue(out var pending))
             {
@@ -70,7 +66,7 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
             }
             else
             {
-                _logger.LogWarning("[CommandQueue] No pending command found, adding to queue.");
+                _logger.LogDebug("[CommandQueue] No pending command found, adding to queue.");
                 _messageQueue.Enqueue(trimmed);
                 NotifySubscribers(trimmed, cancellationToken);
             }

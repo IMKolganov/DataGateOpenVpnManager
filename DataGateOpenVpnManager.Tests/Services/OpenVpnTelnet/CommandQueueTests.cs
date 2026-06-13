@@ -62,6 +62,7 @@ public class CommandQueueTests
     [InlineData("NOTIFY: event occurred")]
     [InlineData("NOTICE: system message")]
     [InlineData("Command output\nEND")]
+    [InlineData("1781288640,CONNECTED,SUCCESS,10.51.30.1,,,,\nEND")]
     public async Task SendCommandAsync_WithValidResponse_ReturnsResponse(string response)
     {
         // Arrange

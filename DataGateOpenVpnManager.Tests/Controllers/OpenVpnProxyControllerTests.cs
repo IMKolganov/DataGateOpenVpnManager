@@ -4,6 +4,7 @@ using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Requests;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Responses;
+using DataGateMonitor.SharedModels.Responses;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -39,7 +40,10 @@ public class OpenVpnProxyControllerTests
             Host = "localhost"
         });
 
-        Assert.IsType<NotFoundResult>(result.Result);
+        var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
+        var notFoundBody = Assert.IsType<ApiResponse<ProxyClientLookupResponse>>(notFound.Value);
+        Assert.False(notFoundBody.Success);
+        Assert.Contains("No active proxy session", notFoundBody.Message);
     }
 
     [Fact]
@@ -50,7 +54,9 @@ public class OpenVpnProxyControllerTests
 
         var result = controller.GetClientByLocalPort(new GetProxyClientByLocalPortRequest { LocalPort = 0 });
 
-        Assert.IsType<BadRequestResult>(result.Result);
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequestBody = Assert.IsType<ApiResponse<ProxyClientLookupResponse>>(badRequest.Value);
+        Assert.False(badRequestBody.Success);
     }
 
     [Fact]
@@ -80,7 +86,10 @@ public class OpenVpnProxyControllerTests
         });
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var value = Assert.IsType<ProxyClientLookupResponse>(ok.Value);
+        var wrapped = Assert.IsType<ApiResponse<ProxyClientLookupResponse>>(ok.Value);
+        Assert.True(wrapped.Success);
+        Assert.NotNull(wrapped.Data);
+        var value = wrapped.Data!;
         Assert.Equal("127.0.0.1", value.Host);
         Assert.Equal("conn-1", value.ConnectionId);
         Assert.Equal(ProxyConnectionProtocol.Udp, value.Protocol);
