@@ -1,5 +1,9 @@
 # DataGateOpenVpnManager + OpenVPN Docker Image
 
+OpenVPN sidecar for [DataGate Monitor](https://dash.datagateapp.com/). In the monorepo this is the `openvpn/` submodule ([DataGateMonitor](https://github.com/IMKolganov/DataGateMonitor)). Standalone clone: [DataGateOpenVpnManager](https://github.com/IMKolganov/DataGateOpenVpnManager).
+
+**Links:** [DataGate](https://datagateapp.com/) · [Download](https://datagateapp.com/download) · [Telegram @datagateapp](https://t.me/datagateapp)
+
 This project builds a Docker image containing:
 
 * A .NET 9 application: **DataGateOpenVpnManager**
@@ -136,9 +140,10 @@ services:
 
 ## 👤 Maintainer
 
-Created by **Ivan Kolganov** ❤️ based on Kyle Manna’s OpenVPN concepts.
+Created by **Ivan Kolganov** based on Kyle Manna’s OpenVPN concepts.
 
-GitHub: [IMKolganov/DataGateOpenVpnManager](https://github.com/IMKolganov/DataGateOpenVpnManager)
+- GitHub: [IMKolganov/DataGateOpenVpnManager](https://github.com/IMKolganov/DataGateOpenVpnManager)
+- [LinkedIn](https://www.linkedin.com/in/imkolganov/?locale=en) · [Telegram](https://t.me/KolganovIvan) · [Buy Me a Coffee](https://buymeacoffee.com/imkolganov)
 
 ---
 
