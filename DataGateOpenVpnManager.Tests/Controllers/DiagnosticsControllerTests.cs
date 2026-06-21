@@ -4,6 +4,7 @@ using DataGateOpenVpnManager.Services.OpenVpnTelnet;
 using DataGateOpenVpnManager.Services.Proxy;
 using DataGateOpenVpnManager.Tests.Services.OpenVpnTelnet.Fakes;
 using DataGateOpenVpnManager.Tests.Services.Proxy;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Diagnostics.Responses;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
 using DataGateMonitor.SharedModels.Responses;

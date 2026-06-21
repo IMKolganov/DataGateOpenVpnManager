@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.Proxy;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Diagnostics.Responses;
 using DataGateMonitor.SharedModels.Responses;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -22,7 +23,9 @@ public class DiagnosticsController(
     [HttpGet("proxy-audit")]
     public ActionResult<ApiResponse<ProxyAuditDiagnosticsResponse>> GetProxyAudit([FromQuery] int limit = 100)
     {
-        var entries = sessionAudit.GetRecent(limit);
+        var entries = sessionAudit.GetRecent(limit)
+            .Select(MapAuditEntry)
+            .ToList();
         return Ok(ApiResponse<ProxyAuditDiagnosticsResponse>.SuccessResponse(new ProxyAuditDiagnosticsResponse
         {
             CheckedAtUtc = DateTime.UtcNow,
@@ -115,6 +118,16 @@ public class DiagnosticsController(
         }
     }
 
+    private static ProxySessionAuditEntryDto MapAuditEntry(ProxySessionAuditEntry entry) => new()
+    {
+        AtUtc = entry.AtUtc,
+        Event = entry.Event,
+        ConnectionId = entry.ConnectionId,
+        Decision = entry.Decision,
+        Reason = entry.Reason,
+        Details = entry.Details
+    };
+
     private static async Task<DnsProbeResult> ProbeDnsAsync(string dnsHost, CancellationToken cancellationToken)
     {
         if (!IPAddress.TryParse(dnsHost, out var ip))
@@ -189,55 +202,4 @@ public class DiagnosticsController(
         ms.WriteByte(0x00); ms.WriteByte(0x01); // CLASS IN
         return ms.ToArray();
     }
-}
-
-public sealed class ProxySessionDiagnosticsResponse
-{
-    public required DateTime CheckedAtUtc { get; init; }
-    public required bool ManagementStatusAvailable { get; init; }
-    public double? ManagementStatusAgeSeconds { get; init; }
-    public required int ManagementClientCount { get; init; }
-    public required bool PeerEvaluationAvailable { get; init; }
-    public string? PeerEvaluationSkipReason { get; init; }
-    public required int ActiveProxySessionCount { get; init; }
-    public required int ZombieSessionCount { get; init; }
-    public required string DnsProbeTarget { get; init; }
-    public required string DnsProbeScope { get; init; }
-    public required string DnsProbeNote { get; init; }
-    public required DnsProbeResult DnsProbe { get; init; }
-    public required IReadOnlyList<ProxySessionDiagnosticItem> Sessions { get; init; }
-}
-
-public sealed class ProxySessionDiagnosticItem
-{
-    public required string ConnectionId { get; init; }
-    public required string Protocol { get; init; }
-    public required string RealClient { get; init; }
-    public required string LocalProxy { get; init; }
-    public required DateTime ConnectedAtUtc { get; init; }
-    public required long ProxyClientToServerBytes { get; init; }
-    public required long ProxyServerToClientBytes { get; init; }
-    public required bool InOpenVpnManagement { get; init; }
-    public required bool MissingFromManagement { get; init; }
-    public required bool IsZombie { get; init; }
-    public string? OpenVpnCommonName { get; init; }
-    public string? OpenVpnVirtualAddress { get; init; }
-    public long? ManagementBytesReceived { get; init; }
-    public long? ManagementBytesSent { get; init; }
-}
-
-public sealed class DnsProbeResult
-{
-    public required string Host { get; init; }
-    public required int Port { get; init; }
-    public bool Responded { get; init; }
-    public int ResponseBytes { get; init; }
-    public string? Error { get; init; }
-}
-
-public sealed class ProxyAuditDiagnosticsResponse
-{
-    public required DateTime CheckedAtUtc { get; init; }
-    public required int Count { get; init; }
-    public required IReadOnlyList<ProxySessionAuditEntry> Entries { get; init; }
 }
