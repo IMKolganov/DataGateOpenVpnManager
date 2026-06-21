@@ -12,6 +12,8 @@ public class JwtValidationMiddleware(RequestDelegate next)
 
     private static readonly string[] LocalOnlyPaths =
     {
+        "/api/info",
+        "/api/diagnostics",
         "/api/vpn-events/connect",
         "/api/vpn-events/disconnect",
         "/api/vpn-events/tlsverify",

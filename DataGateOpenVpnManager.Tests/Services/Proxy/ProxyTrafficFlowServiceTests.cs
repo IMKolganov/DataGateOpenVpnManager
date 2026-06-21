@@ -237,4 +237,30 @@ public class ProxyTrafficFlowServiceTests
         Assert.Equal("alice", update.Username);
         Assert.Equal("alice@example.com", update.Email);
     }
+
+    [Fact]
+    public void TryGetTotals_ReturnsCurrentTotals_ForActiveConnection()
+    {
+        var service = new ProxyTrafficFlowService();
+        var connectedAt = new DateTime(2026, 05, 08, 12, 0, 0, DateTimeKind.Utc);
+        service.RegisterConnection(new ActiveProxyConnection
+        {
+            ConnectionId = "conn-5",
+            Protocol = ProxyConnectionProtocol.Tcp,
+            RealClientIp = "198.18.0.9",
+            RealClientPort = 53000,
+            LocalProxyIp = "127.0.0.1",
+            LocalProxyPort = 60300,
+            TargetIp = "127.0.0.1",
+            TargetPort = 1194,
+            ConnectedAtUtc = connectedAt
+        });
+
+        service.RecordTraffic("conn-5", ProxyTrafficFlowDirection.ClientToServer, 100, connectedAt);
+        service.RecordTraffic("conn-5", ProxyTrafficFlowDirection.ServerToClient, 200, connectedAt);
+
+        Assert.True(service.TryGetTotals("conn-5", out var c2s, out var s2c));
+        Assert.Equal(100, c2s);
+        Assert.Equal(200, s2c);
+    }
 }

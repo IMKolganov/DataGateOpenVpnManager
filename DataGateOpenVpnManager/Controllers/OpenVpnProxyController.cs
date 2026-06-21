@@ -19,7 +19,10 @@ public class OpenVpnProxyController(
     IActiveProxyConnectionService activeProxyConnections,
     IProxyConnectionHistoryService proxyConnectionHistory,
     IProxyTrafficFlowService proxyTrafficFlow,
-    IProxyConnectionIdentityResolver identityResolver) : ControllerBase
+    IProxyConnectionIdentityResolver identityResolver,
+    IProxyByteDebugService proxyByteDebug,
+    IProxyConnectionLifetimeService connectionLifetime,
+    IProxySessionAuditService sessionAudit) : ControllerBase
 {
     private const int MaxUdpDatagramSize = 64 * 1024;
     private const int WsSegmentSize = 16 * 1024;
@@ -90,6 +93,7 @@ public class OpenVpnProxyController(
         var modeNorm = (mode ?? "tcp").Trim().ToLowerInvariant();
         var identity = identityResolver.Resolve(HttpContext, clientRef);
         var connectionId = Guid.NewGuid().ToString("N");
+        connectionLifetime.Register(connectionId, linkedCts);
 
         try
         {
@@ -105,6 +109,10 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogDebug(e, "Proxy failed. mode={Mode} {Message}", modeNorm, e.Message);
+        }
+        finally
+        {
+            connectionLifetime.Unregister(connectionId);
         }
 
         try
@@ -322,6 +330,19 @@ public class OpenVpnProxyController(
         activeProxyConnections.Add(connection);
         proxyTrafficFlow.RegisterConnection(connection, identity);
 
+        var connectDetails = ProxyAuditDetails.ForConnection(connection);
+        if (identity?.ClientRef is not null)
+            connectDetails["clientRef"] = identity.ClientRef;
+        sessionAudit.Record(new ProxySessionAuditEntry
+        {
+            AtUtc = DateTime.UtcNow,
+            Event = "proxy.connected",
+            ConnectionId = connectionId,
+            Decision = "ok",
+            Reason = protocol.ToString(),
+            Details = connectDetails
+        });
+
         proxyConnectionHistory.Add(new ProxyConnectionHistoryItem
         {
             ConnectionId = connectionId,
@@ -339,15 +360,34 @@ public class OpenVpnProxyController(
 
     private void UnregisterConnection(string connectionId)
     {
-        if (!activeProxyConnections.TryGet(connectionId, out var conn) || conn is null)
-        {
-            activeProxyConnections.Remove(connectionId);
-            proxyTrafficFlow.UnregisterConnection(connectionId);
-            return;
-        }
+        ActiveProxyConnection? conn = null;
+        if (activeProxyConnections.TryGet(connectionId, out var existing))
+            conn = existing;
 
         activeProxyConnections.Remove(connectionId);
-        proxyTrafficFlow.UnregisterConnection(connectionId);
+        var terminal = proxyTrafficFlow.UnregisterConnection(connectionId);
+        if (terminal is not null)
+        {
+            proxyByteDebug.ReportDisconnect(terminal);
+            var disconnectDetails = new Dictionary<string, string>
+            {
+                ["proxyC2S"] = terminal.ClientToServerBytesTotal.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["proxyS2C"] = terminal.ServerToClientBytesTotal.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["local"] = $"{terminal.LocalProxyIp}:{terminal.LocalProxyPort}"
+            };
+            sessionAudit.Record(new ProxySessionAuditEntry
+            {
+                AtUtc = DateTime.UtcNow,
+                Event = "proxy.disconnected",
+                ConnectionId = connectionId,
+                Decision = "closed",
+                Reason = "pump finished",
+                Details = disconnectDetails
+            });
+        }
+
+        if (conn is null)
+            return;
 
         proxyConnectionHistory.Add(new ProxyConnectionHistoryItem
         {
