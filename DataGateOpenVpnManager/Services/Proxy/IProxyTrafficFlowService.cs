@@ -6,7 +6,8 @@ namespace DataGateOpenVpnManager.Services.Proxy;
 public interface IProxyTrafficFlowService
 {
     void RegisterConnection(ActiveProxyConnection connection, ProxyConnectionIdentity? identity = null);
-    void UnregisterConnection(string connectionId, DateTime? disconnectedAtUtc = null);
+    ProxyTrafficFlowUpdate? UnregisterConnection(string connectionId, DateTime? disconnectedAtUtc = null);
+    bool TryGetTotals(string connectionId, out long clientToServerBytesTotal, out long serverToClientBytesTotal);
     void RegisterConnectFailed(
         string connectionId,
         ProxyConnectionProtocol protocol,

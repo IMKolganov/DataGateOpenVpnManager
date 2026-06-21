@@ -73,6 +73,8 @@ public class JwtValidationMiddlewareTests
     }
 
     [Theory]
+    [InlineData("/api/info")]
+    [InlineData("/api/diagnostics/proxy-audit")]
     [InlineData("/api/vpn-events/connect")]
     [InlineData("/api/vpn-events/disconnect")]
     public async Task Invoke_WhenLocalOnlyPathAndLoopback_CallsNext(string path)
