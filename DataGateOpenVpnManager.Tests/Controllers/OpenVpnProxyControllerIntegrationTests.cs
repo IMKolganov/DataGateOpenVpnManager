@@ -2,6 +2,7 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using DataGateOpenVpnManager.Controllers;
 using DataGateOpenVpnManager.Services.Proxy;
+using DataGateOpenVpnManager.Tests.Services.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -91,6 +92,9 @@ public class OpenVpnProxyControllerIntegrationTests
                 services.AddSingleton<IProxyConnectionHistoryService>(history);
                 services.AddSingleton<IProxyTrafficFlowService>(flow);
                 services.AddSingleton<IProxyConnectionIdentityResolver>(identityResolver);
+                services.AddSingleton<IProxyByteDebugService>(new NoOpProxyByteDebugService());
+                services.AddSingleton<IProxyConnectionLifetimeService, ProxyConnectionLifetimeService>();
+                services.AddSingleton<IProxySessionAuditService, NoOpProxySessionAuditService>();
                 services.AddSingleton(NullLogger<OpenVpnProxyController>.Instance);
                 services.AddControllers().AddApplicationPart(typeof(OpenVpnProxyController).Assembly);
             })
@@ -175,6 +179,13 @@ public class OpenVpnProxyControllerIntegrationTests
         }
 
         Assert.True(condition(), "Condition was not met before timeout.");
+    }
+
+    private sealed class NoOpProxyByteDebugService : IProxyByteDebugService
+    {
+        public void ReportDisconnect(ProxyTrafficFlowUpdate update)
+        {
+        }
     }
 
     private sealed class TcpEchoServer : IAsyncDisposable

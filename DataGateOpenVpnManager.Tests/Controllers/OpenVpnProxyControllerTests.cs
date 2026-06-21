@@ -1,5 +1,6 @@
 using DataGateOpenVpnManager.Controllers;
 using DataGateOpenVpnManager.Services.Proxy;
+using DataGateOpenVpnManager.Tests.Services.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Enums;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy.Requests;
@@ -18,14 +19,20 @@ public class OpenVpnProxyControllerTests
         IActiveProxyConnectionService active,
         IProxyConnectionHistoryService? history = null,
         IProxyTrafficFlowService? trafficFlow = null,
-        IProxyConnectionIdentityResolver? identityResolver = null)
+        IProxyConnectionIdentityResolver? identityResolver = null,
+        IProxyByteDebugService? byteDebug = null,
+        IProxyConnectionLifetimeService? lifetime = null,
+        IProxySessionAuditService? sessionAudit = null)
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
         var logger = new Mock<ILogger<OpenVpnProxyController>>();
         history ??= new Mock<IProxyConnectionHistoryService>().Object;
         trafficFlow ??= new Mock<IProxyTrafficFlowService>().Object;
         identityResolver ??= new Mock<IProxyConnectionIdentityResolver>().Object;
-        return new OpenVpnProxyController(config, logger.Object, active, history, trafficFlow, identityResolver);
+        byteDebug ??= new Mock<IProxyByteDebugService>().Object;
+        lifetime ??= new Mock<IProxyConnectionLifetimeService>().Object;
+        sessionAudit ??= new NoOpProxySessionAuditService();
+        return new OpenVpnProxyController(config, logger.Object, active, history, trafficFlow, identityResolver, byteDebug, lifetime, sessionAudit);
     }
 
     [Fact]
