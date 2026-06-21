@@ -42,10 +42,7 @@ public sealed class ProxyZombieConnectionMonitorService(
     {
         var opts = options.Value;
         if (opts.CloseZombieAfterMissingSeconds <= 0)
-        {
-            Audit(null, "zombie.check_skipped", "skip", "CloseZombieAfterMissingSeconds=0");
             return;
-        }
 
         var connections = activeConnections.GetAll();
         if (connections.Count == 0)
@@ -56,31 +53,15 @@ public sealed class ProxyZombieConnectionMonitorService(
         }
 
         var snapshot = statusCache.GetSnapshot();
-        if (snapshot is null || !snapshot.IsValid)
+        if (!ProxyManagementPeerDiagnostics.CanEvaluatePeerPresence(snapshot, opts, out var skipReason))
         {
-            Audit(null, "zombie.check_skipped", "skip", "management cache empty", ProxyAuditDetails.ForSnapshot(snapshot));
+            Audit(null, "zombie.check_skipped", "skip", skipReason ?? "peer evaluation unavailable",
+                ProxyAuditDetails.ForSnapshot(snapshot));
             return;
         }
 
         var now = DateTime.UtcNow;
-        var cacheAge = now - snapshot.FetchedAtUtc;
-        var maxCacheAge = TimeSpan.FromSeconds(Math.Max(10, opts.ManagementStatusRefreshSeconds * 2));
-        if (cacheAge > maxCacheAge)
-        {
-            var details = ProxyAuditDetails.ForSnapshot(snapshot);
-            details["maxCacheAgeSec"] = maxCacheAge.TotalSeconds.ToString(CultureInfo.InvariantCulture);
-            Audit(null, "zombie.check_skipped", "skip", "management cache stale", details);
-            return;
-        }
-
-        if (snapshot.Clients.Count == 0)
-        {
-            var details = ProxyAuditDetails.ForSnapshot(snapshot);
-            details["activeProxyCount"] = connections.Count.ToString(CultureInfo.InvariantCulture);
-            Audit(null, "zombie.check_skipped", "skip", "CLIENT_LIST empty while proxy active", details);
-            return;
-        }
-
+        var cacheAge = now - snapshot!.FetchedAtUtc;
         var activeIds = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var connection in connections)

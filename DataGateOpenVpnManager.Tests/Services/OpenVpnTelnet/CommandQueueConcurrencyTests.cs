@@ -105,6 +105,25 @@ public class CommandQueueConcurrencyTests
             Assert.Contains($"client-{i}", results[i]);
     }
 
+    [Fact]
+    public async Task SendCommandAsync_LateResponseAfterTimeout_DoesNotPoisonNextCommand()
+    {
+        var telnet = new FakeTelnetClient();
+        var queue = new CommandQueue(telnet, Mock.Of<ILogger<CommandQueue>>());
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            queue.SendCommandAsync("slow", CancellationToken.None, timeoutMs: 50));
+
+        telnet.SimulateIncomingData("late-response\nEND");
+
+        var second = queue.SendCommandAsync("fast", CancellationToken.None, timeoutMs: 5000);
+        telnet.SimulateIncomingData("expected-response\nEND");
+
+        var result = await second;
+        Assert.Contains("expected-response", result);
+        Assert.DoesNotContain("late-response", result);
+    }
+
     private sealed class ConcurrentTrackingFakeTelnetClient : FakeTelnetClient
     {
         private int _concurrentSends;

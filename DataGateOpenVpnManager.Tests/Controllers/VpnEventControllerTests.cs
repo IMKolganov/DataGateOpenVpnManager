@@ -54,6 +54,38 @@ public class VpnEventControllerTests
     }
 
     [Fact]
+    public async Task OnClientAttempt_ReturnsOk()
+    {
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientProxyMock.Setup(c => c.SendCoreAsync("ClientAttempted", It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var hubContext = CreateHubContextMock(clientProxyMock.Object);
+
+        var controller = new VpnEventController(_loggerMock.Object, hubContext);
+        var data = new VpnEventRequest { CommonName = "client1", VirtualAddress = "10.51.16.2" };
+
+        var result = await controller.OnClientAttempt(data, CancellationToken.None);
+
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
+    public async Task OnTlsVerify_ReturnsOk()
+    {
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientProxyMock.Setup(c => c.SendCoreAsync("TlsVerified", It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var hubContext = CreateHubContextMock(clientProxyMock.Object);
+
+        var controller = new VpnEventController(_loggerMock.Object, hubContext);
+        var data = new VpnEventRequest { CommonName = "client1", Message = "ok" };
+
+        var result = await controller.OnTlsVerify(data, CancellationToken.None);
+
+        Assert.IsType<OkResult>(result);
+    }
+
+    [Fact]
     public async Task OnError_ReturnsOk_AndSendsErrorEvent()
     {
         var clientProxyMock = new Mock<IClientProxy>();

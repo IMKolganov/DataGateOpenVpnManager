@@ -12,6 +12,12 @@ public sealed class OpenVpnManagementStatusRefreshService(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!options.Value.NeedsBackgroundManagementRefresh)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                continue;
+            }
+
             var interval = Math.Max(5, options.Value.ManagementStatusRefreshSeconds);
             try
             {

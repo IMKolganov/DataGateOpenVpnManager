@@ -55,4 +55,8 @@ public sealed class OpenVpnProxyOptions
     public int ManagementStatusRefreshSeconds { get; set; } = 30;
 
     internal bool IsSessionAuditEnabled => SessionAudit || ByteDebug;
+
+    internal bool NeedsBackgroundManagementRefresh =>
+        CloseZombieAfterMissingSeconds > 0
+        || ByteDebug && ByteDebugIntervalSeconds > 0;
 }

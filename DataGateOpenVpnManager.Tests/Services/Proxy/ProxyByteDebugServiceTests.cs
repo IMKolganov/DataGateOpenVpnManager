@@ -44,7 +44,7 @@ public class ProxyByteDebugServiceTests
             ConnectedAtUtc = DateTime.UtcNow,
             LastActivityAtUtc = DateTime.UtcNow,
             EmittedAtUtc = DateTime.UtcNow
-        }, "disconnect", CancellationToken.None);
+        }, "periodic", CancellationToken.None);
 
         logger.Verify(
             x => x.Log(

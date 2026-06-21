@@ -29,6 +29,17 @@ public sealed class ProxyByteDebugService(
             return Task.CompletedTask;
         }
 
+        return CompareAndLogCoreAsync(update, reason, cancellationToken);
+    }
+
+    private async Task CompareAndLogCoreAsync(
+        ProxyTrafficFlowUpdate update,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        if (string.Equals(reason, "disconnect", StringComparison.Ordinal))
+            await statusCache.RefreshAsync(cancellationToken);
+
         var snapshot = statusCache.GetSnapshot();
         if (snapshot is null || !snapshot.IsValid)
         {
@@ -40,7 +51,7 @@ public sealed class ProxyByteDebugService(
                 Decision = "skip",
                 Reason = $"{reason}: management cache empty"
             });
-            return Task.CompletedTask;
+            return;
         }
 
         var mgmtClient = OpenVpnManagementStatusParser.FindByLocalProxyPort(
@@ -71,7 +82,7 @@ public sealed class ProxyByteDebugService(
                 update.ClientToServerBytesTotal,
                 update.ServerToClientBytesTotal,
                 (DateTime.UtcNow - snapshot.FetchedAtUtc).TotalSeconds);
-            return Task.CompletedTask;
+            return;
         }
 
         var comparison = ProxyByteComparison.Create(
@@ -99,8 +110,6 @@ public sealed class ProxyByteDebugService(
             Reason = reason,
             Details = okDetails
         });
-
-        return Task.CompletedTask;
     }
 
     private void LogComparison(

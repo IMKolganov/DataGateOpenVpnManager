@@ -1,11 +1,12 @@
 using DataGateOpenVpnManager.Controllers;
 using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
+using DataGateMonitor.SharedModels.Responses;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
-using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Requests;
-using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 
 namespace DataGateOpenVpnManager.Tests.Controllers;
 
@@ -38,7 +39,9 @@ public class OvpnFileControllerTests
         var result = await controller.AddOvpnFile(request, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Equal(metadata, okResult.Value);
+        var response = Assert.IsType<ApiResponse<OvpnFileMetadata>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(metadata.CommonName, response.Data!.CommonName);
     }
 
     [Fact]
@@ -69,7 +72,9 @@ public class OvpnFileControllerTests
         var result = await controller.RevokeOvpnFile(request, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Equal(metadata, okResult.Value);
+        var response = Assert.IsType<ApiResponse<OvpnFileMetadata>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(metadata.CommonName, response.Data!.CommonName);
     }
 
     [Fact]
@@ -85,8 +90,9 @@ public class OvpnFileControllerTests
         var result = await controller.DownloadOvpnFile(request, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var resp = Assert.IsType<OvpnFileDownload>(okResult.Value);
-        Assert.NotNull(resp.Content);
-        Assert.Equal(3, resp.Content.Length);
+        var response = Assert.IsType<ApiResponse<OvpnFileDownload>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data!.Content);
+        Assert.Equal(3, response.Data.Content.Length);
     }
 }

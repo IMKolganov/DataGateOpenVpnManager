@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
+using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.Proxy;
 using DataGateMonitor.SharedModels.Responses;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace DataGateOpenVpnManager.Controllers;
 
@@ -10,6 +12,7 @@ namespace DataGateOpenVpnManager.Controllers;
 [Route("api/diagnostics")]
 public class DiagnosticsController(
     IConfiguration config,
+    IOptions<OpenVpnProxyOptions> proxyOptions,
     IActiveProxyConnectionService activeProxyConnections,
     IProxyTrafficFlowService trafficFlow,
     IOpenVpnManagementStatusCache statusCache,
@@ -44,6 +47,10 @@ public class DiagnosticsController(
 
             var mgmtClients = snapshot?.Clients.ToList() ?? [];
             var dns = await ProbeDnsAsync(dnsTarget, cancellationToken);
+            var canEvaluatePeers = ProxyManagementPeerDiagnostics.CanEvaluatePeerPresence(
+                snapshot,
+                proxyOptions.Value,
+                out var peerEvaluationSkipReason);
 
             var sessions = activeProxyConnections.GetAll()
                 .Select(conn =>
@@ -53,6 +60,10 @@ public class DiagnosticsController(
                         mgmtClients,
                         conn.LocalProxyIp,
                         conn.LocalProxyPort);
+                    var missingFromManagement = mgmt is null;
+                    var isZombie = canEvaluatePeers
+                                   && snapshot is not null
+                                   && ProxyManagementPeerDiagnostics.IsLikelyZombie(conn, mgmt, snapshot);
 
                     return new ProxySessionDiagnosticItem
                     {
@@ -64,7 +75,8 @@ public class DiagnosticsController(
                         ProxyClientToServerBytes = c2s,
                         ProxyServerToClientBytes = s2c,
                         InOpenVpnManagement = mgmt is not null,
-                        IsZombie = mgmt is null,
+                        MissingFromManagement = missingFromManagement,
+                        IsZombie = isZombie,
                         OpenVpnCommonName = mgmt?.CommonName,
                         OpenVpnVirtualAddress = mgmt?.VirtualAddress,
                         ManagementBytesReceived = mgmt?.BytesReceived,
@@ -82,9 +94,14 @@ public class DiagnosticsController(
                     ? null
                     : (DateTime.UtcNow - snapshot.FetchedAtUtc).TotalSeconds,
                 ManagementClientCount = mgmtClients.Count,
+                PeerEvaluationAvailable = canEvaluatePeers,
+                PeerEvaluationSkipReason = peerEvaluationSkipReason,
                 ActiveProxySessionCount = sessions.Count,
                 ZombieSessionCount = sessions.Count(s => s.IsZombie),
                 DnsProbeTarget = dnsTarget,
+                DnsProbeScope = "host-default-route",
+                DnsProbeNote =
+                    "UDP probe uses the host default route, not the VPN client path (e.g. tun1/UFW may differ).",
                 DnsProbe = dns,
                 Sessions = sessions
             };
@@ -180,9 +197,13 @@ public sealed class ProxySessionDiagnosticsResponse
     public required bool ManagementStatusAvailable { get; init; }
     public double? ManagementStatusAgeSeconds { get; init; }
     public required int ManagementClientCount { get; init; }
+    public required bool PeerEvaluationAvailable { get; init; }
+    public string? PeerEvaluationSkipReason { get; init; }
     public required int ActiveProxySessionCount { get; init; }
     public required int ZombieSessionCount { get; init; }
     public required string DnsProbeTarget { get; init; }
+    public required string DnsProbeScope { get; init; }
+    public required string DnsProbeNote { get; init; }
     public required DnsProbeResult DnsProbe { get; init; }
     public required IReadOnlyList<ProxySessionDiagnosticItem> Sessions { get; init; }
 }
@@ -197,6 +218,7 @@ public sealed class ProxySessionDiagnosticItem
     public required long ProxyClientToServerBytes { get; init; }
     public required long ProxyServerToClientBytes { get; init; }
     public required bool InOpenVpnManagement { get; init; }
+    public required bool MissingFromManagement { get; init; }
     public required bool IsZombie { get; init; }
     public string? OpenVpnCommonName { get; init; }
     public string? OpenVpnVirtualAddress { get; init; }

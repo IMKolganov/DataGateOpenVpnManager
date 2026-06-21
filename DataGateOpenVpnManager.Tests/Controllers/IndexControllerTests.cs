@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Info;
+using DataGateMonitor.SharedModels.Responses;
 
 namespace DataGateOpenVpnManager.Tests.Controllers;
 
@@ -45,14 +46,15 @@ public class IndexControllerTests
         var result = await controller.Get(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<RootOpenVpnInfoResponse>(okResult.Value);
-        Assert.Equal("DataGateOpenVpnManager", response.Application);
-        Assert.Equal("Testing", response.Environment);
-        Assert.NotNull(response.Version);
-        Assert.NotNull(response.Config);
-        Assert.Equal("8.8.8.8", response.Config.Dns1);
-        Assert.Equal("1194", response.Config.Port);
-        Assert.Equal("5092", response.Config.OpenVpnManagement?.Port);
+        var response = Assert.IsType<ApiResponse<RootOpenVpnInfoResponse>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal("DataGateOpenVpnManager", response.Data!.Application);
+        Assert.Equal("Testing", response.Data.Environment);
+        Assert.NotNull(response.Data.Version);
+        Assert.NotNull(response.Data.Config);
+        Assert.Equal("8.8.8.8", response.Data.Config.Dns1);
+        Assert.Equal("1194", response.Data.Config.Port);
+        Assert.Equal("5092", response.Data.Config.OpenVpnManagement?.Port);
     }
 
     [Fact]
@@ -64,7 +66,7 @@ public class IndexControllerTests
         var result = await controller.Get(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<RootOpenVpnInfoResponse>(okResult.Value);
-        Assert.NotNull(response.Config);
+        var response = Assert.IsType<ApiResponse<RootOpenVpnInfoResponse>>(okResult.Value);
+        Assert.NotNull(response.Data!.Config);
     }
 }

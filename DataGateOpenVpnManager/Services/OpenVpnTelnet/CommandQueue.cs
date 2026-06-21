@@ -5,16 +5,19 @@ namespace DataGateOpenVpnManager.Services.OpenVpnTelnet;
 public class CommandQueue : ICommandQueue, IAsyncDisposable
 {
     private readonly ConcurrentQueue<string> _messageQueue = new();
-    private readonly ConcurrentQueue<PendingCommand> _pendingCommands = new();
     private readonly TelnetClient _telnetClient;
     private readonly List<IMessageSubscriber> _subscribers = new();
     private readonly Lock _subscriberLock = new();
+    private readonly Lock _pendingLock = new();
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ILogger<CommandQueue> _logger;
     private readonly SemaphoreSlim _commandLock = new(1, 1);
 
-    private record PendingCommand(string CommandText, TaskCompletionSource<string> TaskSource);
+    private PendingCommand? _activePending;
+    private long _nextCommandSequence;
+
+    private sealed record PendingCommand(long Sequence, string CommandText, TaskCompletionSource<string> TaskSource);
 
     public bool HasSubscribers
     {
@@ -60,14 +63,22 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
 
         if (OpenVpnManagementMessageCompletion.IsComplete(trimmed))
         {
-            if (_pendingCommands.TryDequeue(out var pending))
+            PendingCommand? pending;
+            lock (_pendingLock)
+                pending = _activePending;
+
+            if (pending is not null && !pending.TaskSource.Task.IsCompleted)
             {
-                if (!pending.TaskSource.Task.IsCompleted)
-                    pending.TaskSource.TrySetResult(trimmed);
+                pending.TaskSource.TrySetResult(trimmed);
+                lock (_pendingLock)
+                {
+                    if (ReferenceEquals(_activePending, pending))
+                        _activePending = null;
+                }
             }
             else
             {
-                _logger.LogDebug("[CommandQueue] No pending command found, adding to queue.");
+                _logger.LogDebug("[CommandQueue] Orphan management response, adding to queue.");
                 _messageQueue.Enqueue(trimmed);
                 NotifySubscribers(trimmed, cancellationToken);
             }
@@ -112,9 +123,10 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
             await _telnetClient.EnsureConnectedAsync(cancellationToken);
 
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var pendingCommand = new PendingCommand(command, tcs);
+            var pendingCommand = new PendingCommand(Interlocked.Increment(ref _nextCommandSequence), command, tcs);
 
-            _pendingCommands.Enqueue(pendingCommand);
+            lock (_pendingLock)
+                _activePending = pendingCommand;
 
             try
             {
@@ -129,11 +141,9 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
                     _logger.LogInformation("[CommandQueue] ✅ Received response for command: {Command} → {Result}", command, result);
                     return result;
                 }
-            
-                if (_pendingCommands.TryDequeue(out var timedOutCommand) && timedOutCommand == pendingCommand)
-                {
-                    tcs.TrySetCanceled();
-                }
+
+                ClearActivePending(pendingCommand);
+                tcs.TrySetCanceled();
 
                 throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");
             }
@@ -141,10 +151,8 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
             {
                 _logger.LogError(ex, "[CommandQueue] Exception in SendCommandAsync");
 
-                if (_pendingCommands.TryDequeue(out var erroredCommand) && erroredCommand == pendingCommand)
-                {
-                    tcs.TrySetException(ex);
-                }
+                ClearActivePending(pendingCommand);
+                tcs.TrySetException(ex);
 
                 throw;
             }
@@ -155,6 +163,15 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
         }
     }
 
+
+    private void ClearActivePending(PendingCommand pendingCommand)
+    {
+        lock (_pendingLock)
+        {
+            if (ReferenceEquals(_activePending, pendingCommand))
+                _activePending = null;
+        }
+    }
 
     public (bool result, string? message) TryGetMessage()
     {
