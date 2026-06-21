@@ -14,6 +14,8 @@ VPN_NETMASK=${VPN_NETMASK:-255.255.255.0}
 TUN_IF="${TUN_IF:-tun0}"
 WAN_IF="${WAN_IF:-eth0}"
 DCO="${DCO:-false}"
+# Optional push to clients (e.g. 1200 for WSS/UDP tunnels with reduced effective MTU).
+MSSFIX="${MSSFIX:-}"
 
 EASYRSA_DIR="$DATA_DIR/easy-rsa"
 SCRIPT_SOURCE="/scripts"
@@ -113,6 +115,11 @@ if [ "$DCO" = "true" ] || [ "$DCO" = "1" ] || [ "$DCO" = "yes" ]; then
 else
   DCO_OPTION="disable-dco"
 fi
+MSSFIX_LINE=""
+if [ -n "$MSSFIX" ]; then
+  MSSFIX_LINE="push \"mssfix $MSSFIX\""
+  echo "[entrypoint] MSSFIX push enabled: $MSSFIX"
+fi
 cat <<EOF > "$DATA_DIR/server.conf"
 port $PORT
 proto $PROTO
@@ -133,6 +140,7 @@ push "dhcp-option DNS $DNS1"
 push "dhcp-option DNS $DNS2"
 push "block-outside-dns"
 push "redirect-gateway def1"
+${MSSFIX_LINE}
 
 keepalive 15 120
 

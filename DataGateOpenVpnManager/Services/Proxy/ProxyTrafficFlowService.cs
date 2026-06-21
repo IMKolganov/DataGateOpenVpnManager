@@ -32,15 +32,16 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
         _connections[connection.ConnectionId] = state;
     }
 
-    public void UnregisterConnection(string connectionId, DateTime? disconnectedAtUtc = null)
+    public ProxyTrafficFlowUpdate? UnregisterConnection(string connectionId, DateTime? disconnectedAtUtc = null)
     {
         if (!_connections.TryRemove(connectionId, out var state))
-            return;
+            return null;
 
         var emittedAt = disconnectedAtUtc ?? DateTime.UtcNow;
+        ProxyTrafficFlowUpdate terminal;
         lock (state.SyncRoot)
         {
-            _terminalUpdates.Enqueue(new ProxyTrafficFlowUpdate
+            terminal = new ProxyTrafficFlowUpdate
             {
                 ConnectionId = state.ConnectionId,
                 Protocol = state.Protocol,
@@ -64,11 +65,30 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
                 ConnectedAtUtc = state.ConnectedAtUtc,
                 LastActivityAtUtc = state.LastActivityAtUtc,
                 EmittedAtUtc = emittedAt
-            });
+            };
 
             state.ClientToServerBytesDelta = 0;
             state.ServerToClientBytesDelta = 0;
         }
+
+        _terminalUpdates.Enqueue(terminal);
+        return terminal;
+    }
+
+    public bool TryGetTotals(string connectionId, out long clientToServerBytesTotal, out long serverToClientBytesTotal)
+    {
+        clientToServerBytesTotal = 0;
+        serverToClientBytesTotal = 0;
+        if (!_connections.TryGetValue(connectionId, out var state))
+            return false;
+
+        lock (state.SyncRoot)
+        {
+            clientToServerBytesTotal = state.ClientToServerBytesTotal;
+            serverToClientBytesTotal = state.ServerToClientBytesTotal;
+        }
+
+        return true;
     }
 
     public void RegisterConnectFailed(
