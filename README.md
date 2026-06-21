@@ -72,8 +72,14 @@ Environment variables:
 | `PROTO`                     | Protocol (`udp` or `tcp`)          | `udp`                |
 | `DATA_DIR`                  | Data directory for config/logs/pki | `/mnt`               |
 | `DNS1`, `DNS2`              | Pushed DNS servers                 | `8.8.8.8`, `8.8.4.4` |
+| `MSSFIX`                    | Optional `push "mssfix N"` to clients (WSS/UDP) | _(unset)_ |
 | `VPN_SUBNET`, `VPN_NETMASK` | VPN subnet config                  | `10.51.28.0/24`      |
 | `OpenVpnManagement__Port`   | OpenVPN management interface port  | `5092`               |
+| `OpenVpnProxy__ByteDebug`   | Compare proxy vs management bytes (WSS debug) | `false` |
+| `OpenVpnProxy__ByteDebugIntervalSeconds` | Periodic byte comparison while connected (`0` = on disconnect only) | `0` |
+| `OpenVpnProxy__CloseZombieAfterMissingSeconds` | Close WSS when OpenVPN peer missing from management (`0` = off) | `0` |
+| `OpenVpnProxy__ZombieCheckIntervalSeconds` | How often to check for zombie proxy sessions | `30` |
+| `PROXY_BYTE_DEBUG`          | Legacy alias for `OpenVpnProxy__ByteDebug` (`1` / `true`) | _(unset)_ |
 
 ---
 
