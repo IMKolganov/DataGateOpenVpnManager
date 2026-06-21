@@ -12,6 +12,7 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ILogger<CommandQueue> _logger;
+    private readonly SemaphoreSlim _commandLock = new(1, 1);
 
     private record PendingCommand(string CommandText, TaskCompletionSource<string> TaskSource);
 
@@ -105,44 +106,52 @@ public class CommandQueue : ICommandQueue, IAsyncDisposable
         
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _telnetClient.EnsureConnectedAsync(cancellationToken);
-
-        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingCommand = new PendingCommand(command, tcs);
-
-        _pendingCommands.Enqueue(pendingCommand);
-
+        await _commandLock.WaitAsync(cancellationToken);
         try
         {
-            await _telnetClient.SendAsync(command, cancellationToken);
+            await _telnetClient.EnsureConnectedAsync(cancellationToken);
 
-            var timeoutTask = Task.Delay(timeoutMs, cancellationToken);
-            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+            var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var pendingCommand = new PendingCommand(command, tcs);
 
-            if (completedTask == tcs.Task)
+            _pendingCommands.Enqueue(pendingCommand);
+
+            try
             {
-                var result = await tcs.Task; // can rethrow if tcs.Task faulted
-                _logger.LogInformation("[CommandQueue] ✅ Received response for command: {Command} → {Result}", command, result);
-                return result;
-            }
+                await _telnetClient.SendAsync(command, cancellationToken);
+
+                var timeoutTask = Task.Delay(timeoutMs, cancellationToken);
+                var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+
+                if (completedTask == tcs.Task)
+                {
+                    var result = await tcs.Task;
+                    _logger.LogInformation("[CommandQueue] ✅ Received response for command: {Command} → {Result}", command, result);
+                    return result;
+                }
             
-            if (_pendingCommands.TryDequeue(out var timedOutCommand) && timedOutCommand == pendingCommand)
-            {
-                tcs.TrySetCanceled();
-            }
+                if (_pendingCommands.TryDequeue(out var timedOutCommand) && timedOutCommand == pendingCommand)
+                {
+                    tcs.TrySetCanceled();
+                }
 
-            throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");
+                throw new TimeoutException($"[CommandQueue] Command \"{command}\" timed out after {timeoutMs}ms.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[CommandQueue] Exception in SendCommandAsync");
+
+                if (_pendingCommands.TryDequeue(out var erroredCommand) && erroredCommand == pendingCommand)
+                {
+                    tcs.TrySetException(ex);
+                }
+
+                throw;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogError(ex, "[CommandQueue] Exception in SendCommandAsync");
-
-            if (_pendingCommands.TryDequeue(out var erroredCommand) && erroredCommand == pendingCommand)
-            {
-                tcs.TrySetException(ex);
-            }
-
-            throw;
+            _commandLock.Release();
         }
     }
 
