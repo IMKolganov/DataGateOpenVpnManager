@@ -1,8 +1,15 @@
 namespace DataGateOpenVpnManager.Services.PiHole;
 
+public sealed class PiHoleQueryFetchResult
+{
+    public IReadOnlyList<PiHoleQueryRecord> Records { get; init; } = Array.Empty<PiHoleQueryRecord>();
+
+    public int TotalFromApi { get; init; }
+}
+
 public interface IPiHoleApiClient
 {
-    Task<IReadOnlyList<PiHoleQueryRecord>> GetQueriesSinceAsync(
+    Task<PiHoleQueryFetchResult> GetQueriesSinceAsync(
         DateTimeOffset fromUtc,
         DateTimeOffset untilUtc,
         int maxCount,

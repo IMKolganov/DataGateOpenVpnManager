@@ -4,6 +4,7 @@ using DataGateOpenVpnManager.Services.PiHole;
 using DataGateMonitor.SharedModels.Responses;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace DataGateOpenVpnManager.Tests.Controllers;
@@ -24,7 +25,14 @@ public class PiHoleControllerTests
         });
         var store = new PiHoleRuntimeOptionsStore(monitor);
         var api = new Mock<IPiHoleApiClient>();
-        var controller = new PiHoleController(store, api.Object);
+        var status = new PiHoleCollectorStatusStore();
+        var cursor = new Mock<IPiHoleQueryCursorStore>();
+        var controller = new PiHoleController(
+            store,
+            api.Object,
+            status,
+            cursor.Object,
+            NullLogger<PiHoleController>.Instance);
 
         var result = controller.PutConfig(new PiHoleOptionsDto
         {

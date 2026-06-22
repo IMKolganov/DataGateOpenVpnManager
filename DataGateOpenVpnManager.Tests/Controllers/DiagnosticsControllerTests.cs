@@ -44,6 +44,8 @@ public class DiagnosticsControllerTests
             audit ?? new ProxySessionAuditService(Options.Create(new OpenVpnProxyOptions { SessionAudit = true }), NullLogger<ProxySessionAuditService>.Instance),
             runtime,
             piHole,
+            new PiHoleCollectorStatusStore(),
+            new Mock<IPiHoleQueryCursorStore>().Object,
             NullLogger<DiagnosticsController>.Instance);
     }
 

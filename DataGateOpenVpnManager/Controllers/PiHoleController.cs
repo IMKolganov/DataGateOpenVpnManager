@@ -10,7 +10,10 @@ namespace DataGateOpenVpnManager.Controllers;
 [Route("api/pi-hole")]
 public class PiHoleController(
     IPiHoleRuntimeOptionsStore runtimeOptions,
-    IPiHoleApiClient piHoleApiClient) : ControllerBase
+    IPiHoleApiClient piHoleApiClient,
+    IPiHoleCollectorStatusStore statusStore,
+    IPiHoleQueryCursorStore cursorStore,
+    ILogger<PiHoleController> logger) : ControllerBase
 {
     [HttpGet("config")]
     public ActionResult<ApiResponse<PiHoleOptionsDto>> GetConfig()
@@ -37,6 +40,15 @@ public class PiHoleController(
         };
 
         runtimeOptions.Apply(merged);
+        statusStore.RecordConfigApplied(DateTimeOffset.UtcNow);
+        logger.LogInformation(
+            "Pi-hole runtime config applied. Enabled={Enabled}, BaseUrl={BaseUrl}, PollIntervalSec={PollIntervalSec}, BatchSize={BatchSize}, HasPassword={HasPassword}",
+            merged.Enabled,
+            merged.BaseUrl,
+            merged.PollIntervalSeconds,
+            merged.BatchSize,
+            !string.IsNullOrEmpty(merged.AppPassword));
+
         return Ok(ApiResponse<PiHoleOptionsDto>.SuccessResponse(ToDto(merged)));
     }
 
@@ -44,17 +56,22 @@ public class PiHoleController(
     public async Task<ActionResult<ApiResponse<PiHoleDiagnosticsResponse>>> GetDiagnostics(
         CancellationToken cancellationToken)
     {
-        var options = runtimeOptions.GetEffective();
-        var probe = await piHoleApiClient.ProbeAsync(cancellationToken);
-        return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(new PiHoleDiagnosticsResponse
+        try
         {
-            CheckedAtUtc = DateTime.UtcNow,
-            Enabled = options.Enabled,
-            BaseUrl = options.BaseUrl,
-            Authenticated = probe.Authenticated,
-            Error = probe.Error,
-            SampleQueryCount = probe.SampleQueryCount
-        }));
+            var options = runtimeOptions.GetEffective();
+            var probe = await piHoleApiClient.ProbeAsync(cancellationToken);
+            var response = PiHoleDiagnosticsFactory.Create(
+                options,
+                statusStore.GetSnapshot(),
+                cursorStore.GetLastUntilUtc(),
+                probe);
+            return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(response));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Pi-hole diagnostics request failed.");
+            return BadRequest(ApiResponse<PiHoleDiagnosticsResponse>.ErrorResponse(ex.Message));
+        }
     }
 
     private static PiHoleOptionsDto ToDto(PiHoleOptions options) => new()

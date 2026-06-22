@@ -52,14 +52,14 @@ public class PiHoleApiClientTests
 
         var sut = new PiHoleApiClient(client, store, NullLogger<PiHoleApiClient>.Instance);
 
-        var records = await sut.GetQueriesSinceAsync(
+        var fetch = await sut.GetQueriesSinceAsync(
             DateTimeOffset.UtcNow.AddMinutes(-1),
             DateTimeOffset.UtcNow,
             100,
             CancellationToken.None);
 
-        Assert.Single(records);
-        Assert.Equal("youtube.com", records[0].Domain);
+        Assert.Single(fetch.Records);
+        Assert.Equal("youtube.com", fetch.Records[0].Domain);
         Assert.Equal(2, calls);
     }
 

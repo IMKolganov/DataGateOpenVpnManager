@@ -21,6 +21,8 @@ public class DiagnosticsController(
     IProxySessionAuditService sessionAudit,
     IPiHoleRuntimeOptionsStore runtimeOptions,
     IPiHoleApiClient piHoleApiClient,
+    IPiHoleCollectorStatusStore statusStore,
+    IPiHoleQueryCursorStore cursorStore,
     ILogger<DiagnosticsController> logger) : ControllerBase
 {
     [HttpGet("proxy-audit")]
@@ -129,19 +131,16 @@ public class DiagnosticsController(
         {
             var options = runtimeOptions.GetEffective();
             var probe = await piHoleApiClient.ProbeAsync(cancellationToken);
-            return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(new PiHoleDiagnosticsResponse
-            {
-                CheckedAtUtc = DateTime.UtcNow,
-                Enabled = options.Enabled,
-                BaseUrl = options.BaseUrl,
-                Authenticated = probe.Authenticated,
-                Error = probe.Error,
-                SampleQueryCount = probe.SampleQueryCount
-            }));
+            var response = PiHoleDiagnosticsFactory.Create(
+                options,
+                statusStore.GetSnapshot(),
+                cursorStore.GetLastUntilUtc(),
+                probe);
+            return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(response));
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Pi-hole diagnostics failed");
+            logger.LogError(ex, "Pi-hole diagnostics failed.");
             return BadRequest(ApiResponse<PiHoleDiagnosticsResponse>.ErrorResponse(ex.Message));
         }
     }

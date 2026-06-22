@@ -20,9 +20,13 @@ public class PiHoleQueryCollectorHostedServiceTests
                 It.IsAny<DateTimeOffset>(),
                 It.IsAny<int>(),
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[]
+            .ReturnsAsync(new PiHoleQueryFetchResult
             {
-                new PiHoleQueryRecord(10, "10.51.30.3", "openai.com", "A", "FORWARDED", DateTimeOffset.UtcNow)
+                TotalFromApi = 1,
+                Records = new[]
+                {
+                    new PiHoleQueryRecord(10, "10.51.30.3", "openai.com", "A", "FORWARDED", DateTimeOffset.UtcNow)
+                }
             });
 
         var cursor = new Mock<IPiHoleQueryCursorStore>();
@@ -58,6 +62,7 @@ public class PiHoleQueryCollectorHostedServiceTests
             api.Object,
             new PiHoleClientIdentityResolver(),
             cursor.Object,
+            new PiHoleCollectorStatusStore(),
             cache.Object,
             hub.Object,
             NullLogger<PiHoleQueryCollectorHostedService>.Instance);

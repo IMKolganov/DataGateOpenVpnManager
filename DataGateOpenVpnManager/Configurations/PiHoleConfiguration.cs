@@ -11,6 +11,7 @@ public static class PiHoleConfiguration
         services.PostConfigure<PiHoleOptions>(options => ApplyLegacyEnv(config, options));
 
         services.AddSingleton<IPiHoleRuntimeOptionsStore, PiHoleRuntimeOptionsStore>();
+        services.AddSingleton<IPiHoleCollectorStatusStore, PiHoleCollectorStatusStore>();
 
         services.AddHttpClient<IPiHoleApiClient, PiHoleApiClient>(client =>
         {

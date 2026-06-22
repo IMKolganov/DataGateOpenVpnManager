@@ -12,6 +12,7 @@ public sealed class PiHoleQueryCollectorHostedService(
     IPiHoleApiClient piHoleApiClient,
     IPiHoleClientIdentityResolver identityResolver,
     IPiHoleQueryCursorStore cursorStore,
+    IPiHoleCollectorStatusStore statusStore,
     IOpenVpnManagementStatusCache managementStatusCache,
     IHubContext<OpenVpnEventHub> eventHub,
     ILogger<PiHoleQueryCollectorHostedService> logger) : BackgroundService
@@ -21,24 +22,34 @@ public sealed class PiHoleQueryCollectorHostedService(
         var cfg = runtimeOptions.GetEffective();
         if (!cfg.Enabled)
         {
-            logger.LogInformation("Pi-hole DNS query collector disabled (PiHole:Enabled=false).");
+            statusStore.SetCollectorRunning(false);
+            logger.LogInformation("Pi-hole DNS collector not started: PiHole:Enabled=false.");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(cfg.BaseUrl))
         {
-            logger.LogWarning("Pi-hole DNS query collector disabled: PiHole:BaseUrl is empty.");
+            statusStore.SetCollectorRunning(false);
+            logger.LogWarning("Pi-hole DNS collector not started: BaseUrl is empty.");
             return;
         }
 
+        statusStore.SetCollectorRunning(true);
         logger.LogInformation(
-            "Pi-hole DNS query collector started. BaseUrl={BaseUrl}, Interval={Interval}s, BatchSize={BatchSize}",
-            cfg.BaseUrl, cfg.PollIntervalSeconds, cfg.BatchSize);
+            "Pi-hole DNS collector started. BaseUrl={BaseUrl}, IntervalSec={IntervalSec}, BatchSize={BatchSize}, LookbackSec={LookbackSec}, SubnetPrefix={SubnetPrefix}",
+            cfg.BaseUrl,
+            cfg.PollIntervalSeconds,
+            cfg.BatchSize,
+            cfg.LookbackSeconds,
+            cfg.ClientSubnetPrefix);
 
         var interval = TimeSpan.FromSeconds(Math.Max(10, cfg.PollIntervalSeconds));
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            cfg = runtimeOptions.GetEffective();
+            interval = TimeSpan.FromSeconds(Math.Max(10, cfg.PollIntervalSeconds));
+
             try
             {
                 await CollectOnceAsync(cfg, stoppingToken);
@@ -49,7 +60,13 @@ public sealed class PiHoleQueryCollectorHostedService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Pi-hole DNS query collection failed.");
+                var at = DateTimeOffset.UtcNow;
+                statusStore.RecordPollFailure(at, ex.Message);
+                logger.LogWarning(
+                    ex,
+                    "Pi-hole poll cycle failed. BaseUrl={BaseUrl}, LastError={Error}",
+                    cfg.BaseUrl,
+                    ex.Message);
             }
 
             try
@@ -61,11 +78,15 @@ public sealed class PiHoleQueryCollectorHostedService(
                 break;
             }
         }
+
+        statusStore.SetCollectorRunning(false);
+        logger.LogInformation("Pi-hole DNS collector stopped.");
     }
 
     internal async Task<int> CollectOnceAsync(PiHoleOptions cfg, CancellationToken cancellationToken)
     {
-        var untilUtc = DateTimeOffset.UtcNow;
+        var pollStarted = DateTimeOffset.UtcNow;
+        var untilUtc = pollStarted;
         var lastUntil = cursorStore.GetLastUntilUtc();
         var fromUtc = lastUntil?.AddSeconds(-Math.Max(0, cfg.LookbackSeconds))
                       ?? untilUtc.AddSeconds(-Math.Max(cfg.LookbackSeconds, cfg.PollIntervalSeconds));
@@ -73,20 +94,42 @@ public sealed class PiHoleQueryCollectorHostedService(
         if (fromUtc >= untilUtc)
             fromUtc = untilUtc.AddSeconds(-5);
 
-        var records = await piHoleApiClient.GetQueriesSinceAsync(
+        logger.LogDebug(
+            "Pi-hole poll window: from={FromUtc:o}, until={UntilUtc:o}, batchSize={BatchSize}",
+            fromUtc,
+            untilUtc,
+            cfg.BatchSize);
+
+        var fetch = await piHoleApiClient.GetQueriesSinceAsync(
             fromUtc,
             untilUtc,
             cfg.BatchSize,
             cancellationToken);
+
+        var records = fetch.Records;
         if (records.Count == 0)
         {
             cursorStore.SaveLastUntilUtc(untilUtc);
+            statusStore.RecordPollSuccess(new PiHolePollSuccessResult
+            {
+                AtUtc = pollStarted,
+                QueriesFetched = fetch.TotalFromApi,
+                QueriesAfterFilter = 0,
+                QueriesEnriched = 0,
+                QueriesForwarded = 0,
+                CursorUntilUtc = untilUtc
+            });
+            logger.LogDebug(
+                "Pi-hole poll: no VPN-scoped queries (apiTotal={ApiTotal}). Cursor advanced to {UntilUtc:o}.",
+                fetch.TotalFromApi,
+                untilUtc);
             return 0;
         }
 
         var snapshot = managementStatusCache.GetSnapshot();
         if (snapshot is null || !snapshot.IsValid)
         {
+            logger.LogDebug("Pi-hole poll: refreshing OpenVPN management snapshot for CN mapping.");
             await managementStatusCache.RefreshAsync(cancellationToken);
             snapshot = managementStatusCache.GetSnapshot();
         }
@@ -95,6 +138,19 @@ public sealed class PiHoleQueryCollectorHostedService(
         if (enriched.Count == 0)
         {
             cursorStore.SaveLastUntilUtc(untilUtc);
+            statusStore.RecordPollSuccess(new PiHolePollSuccessResult
+            {
+                AtUtc = pollStarted,
+                QueriesFetched = fetch.TotalFromApi,
+                QueriesAfterFilter = records.Count,
+                QueriesEnriched = 0,
+                QueriesForwarded = 0,
+                CursorUntilUtc = untilUtc
+            });
+            logger.LogInformation(
+                "Pi-hole poll: {AfterFilter} queries matched subnet but none mapped to VPN clients (management valid={ManagementValid}).",
+                records.Count,
+                snapshot?.IsValid == true);
             return 0;
         }
 
@@ -106,7 +162,24 @@ public sealed class PiHoleQueryCollectorHostedService(
 
         await eventHub.Clients.All.SendAsync("DnsQueriesReceived", batch, cancellationToken);
         cursorStore.SaveLastUntilUtc(untilUtc);
-        logger.LogInformation("Forwarded {Count} Pi-hole DNS queries to event hub.", enriched.Count);
+        statusStore.RecordPollSuccess(new PiHolePollSuccessResult
+        {
+            AtUtc = pollStarted,
+            QueriesFetched = fetch.TotalFromApi,
+            QueriesAfterFilter = records.Count,
+            QueriesEnriched = enriched.Count,
+            QueriesForwarded = enriched.Count,
+            CursorUntilUtc = untilUtc
+        });
+
+        logger.LogInformation(
+            "Pi-hole poll OK: apiTotal={ApiTotal}, afterFilter={AfterFilter}, enriched={Enriched}, forwarded={Forwarded}, window={FromUtc:o}..{UntilUtc:o}",
+            fetch.TotalFromApi,
+            records.Count,
+            enriched.Count,
+            enriched.Count,
+            fromUtc,
+            untilUtc);
         return enriched.Count;
     }
 }
