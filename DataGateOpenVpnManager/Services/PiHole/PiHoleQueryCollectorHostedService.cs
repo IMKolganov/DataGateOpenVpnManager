@@ -135,7 +135,8 @@ public sealed class PiHoleQueryCollectorHostedService(
         }
 
         var enriched = identityResolver.Enrich(records, snapshot);
-        if (enriched.Count == 0)
+        var mapped = enriched.Where(q => !string.IsNullOrWhiteSpace(q.CommonName)).ToList();
+        if (mapped.Count == 0)
         {
             cursorStore.SaveLastUntilUtc(untilUtc);
             statusStore.RecordPollSuccess(new PiHolePollSuccessResult
@@ -157,7 +158,7 @@ public sealed class PiHoleQueryCollectorHostedService(
         var batch = new DnsQueryBatchRequest
         {
             CollectedAtUtc = DateTimeOffset.UtcNow,
-            Queries = enriched
+            Queries = mapped
         };
 
         await eventHub.Clients.All.SendAsync("DnsQueriesReceived", batch, cancellationToken);
@@ -167,8 +168,8 @@ public sealed class PiHoleQueryCollectorHostedService(
             AtUtc = pollStarted,
             QueriesFetched = fetch.TotalFromApi,
             QueriesAfterFilter = records.Count,
-            QueriesEnriched = enriched.Count,
-            QueriesForwarded = enriched.Count,
+            QueriesEnriched = mapped.Count,
+            QueriesForwarded = mapped.Count,
             CursorUntilUtc = untilUtc
         });
 
@@ -176,10 +177,10 @@ public sealed class PiHoleQueryCollectorHostedService(
             "Pi-hole poll OK: apiTotal={ApiTotal}, afterFilter={AfterFilter}, enriched={Enriched}, forwarded={Forwarded}, window={FromUtc:o}..{UntilUtc:o}",
             fetch.TotalFromApi,
             records.Count,
-            enriched.Count,
-            enriched.Count,
+            mapped.Count,
+            mapped.Count,
             fromUtc,
             untilUtc);
-        return enriched.Count;
+        return mapped.Count;
     }
 }

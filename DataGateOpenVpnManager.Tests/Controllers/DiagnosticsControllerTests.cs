@@ -26,7 +26,8 @@ public class DiagnosticsControllerTests
         IConfiguration? config = null,
         OpenVpnProxyOptions? options = null,
         IPiHoleRuntimeOptionsStore? runtimeOptions = null,
-        IPiHoleApiClient? piHoleApiClient = null)
+        IPiHoleApiClient? piHoleApiClient = null,
+        IPiHoleCollectorStatusStore? statusStore = null)
     {
         var configuration = config ?? new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["DNS1"] = "10.51.15.1" })
@@ -34,6 +35,7 @@ public class DiagnosticsControllerTests
 
         var runtime = runtimeOptions ?? new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
         var piHole = piHoleApiClient ?? new Mock<IPiHoleApiClient>().Object;
+        var status = statusStore ?? new PiHoleCollectorStatusStore();
 
         return new DiagnosticsController(
             configuration,
@@ -44,7 +46,7 @@ public class DiagnosticsControllerTests
             audit ?? new ProxySessionAuditService(Options.Create(new OpenVpnProxyOptions { SessionAudit = true }), NullLogger<ProxySessionAuditService>.Instance),
             runtime,
             piHole,
-            new PiHoleCollectorStatusStore(),
+            status,
             new Mock<IPiHoleQueryCursorStore>().Object,
             NullLogger<DiagnosticsController>.Instance);
     }
@@ -152,5 +154,34 @@ public class DiagnosticsControllerTests
         Assert.False(session.IsZombie);
         Assert.Equal("adg-77", session.OpenVpnCommonName);
         Assert.Equal("host-default-route", response.Data.DnsProbeScope);
+    }
+
+    [Fact]
+    public async Task GetPiHoleDiagnostics_ReturnsStatusAndProbeData()
+    {
+        var runtime = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://pi-hole:8080",
+            AppPassword = "secret",
+            PollIntervalSeconds = 60
+        }));
+        var status = new PiHoleCollectorStatusStore();
+        status.SetCollectorRunning(true);
+        status.RecordPollFailure(DateTimeOffset.UtcNow, "timeout");
+
+        var api = new Mock<IPiHoleApiClient>();
+        api.Setup(x => x.ProbeAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync((false, 0, "auth failed"));
+
+        var controller = CreateController(runtimeOptions: runtime, piHoleApiClient: api.Object, statusStore: status);
+        var result = await controller.GetPiHoleDiagnostics(CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<ApiResponse<PiHoleDiagnosticsResponse>>(ok.Value);
+        Assert.True(response.Success);
+        Assert.Equal("http://pi-hole:8080", response.Data!.BaseUrl);
+        Assert.Equal("timeout", response.Data.LastPollError);
+        Assert.Equal("auth failed", response.Data.Error);
     }
 }
