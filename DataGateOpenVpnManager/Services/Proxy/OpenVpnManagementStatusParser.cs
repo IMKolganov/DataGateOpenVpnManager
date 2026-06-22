@@ -68,6 +68,22 @@ public static class OpenVpnManagementStatusParser
         return null;
     }
 
+    public static OpenVpnManagementClientEntry? FindByVirtualAddress(
+        IEnumerable<OpenVpnManagementClientEntry> clients,
+        string? virtualAddress)
+    {
+        if (string.IsNullOrWhiteSpace(virtualAddress))
+            return null;
+
+        foreach (var client in clients)
+        {
+            if (string.Equals(client.VirtualAddress, virtualAddress, StringComparison.OrdinalIgnoreCase))
+                return client;
+        }
+
+        return null;
+    }
+
     internal static bool LoopbackHostsEqual(string? expected, string actual)
     {
         var normalizedExpected = NormalizeLoopbackHost(expected);

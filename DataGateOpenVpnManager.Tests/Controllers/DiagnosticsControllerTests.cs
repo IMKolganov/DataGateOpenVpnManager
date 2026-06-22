@@ -1,6 +1,7 @@
 using DataGateOpenVpnManager.Controllers;
 using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.OpenVpnTelnet;
+using DataGateOpenVpnManager.Services.PiHole;
 using DataGateOpenVpnManager.Services.Proxy;
 using DataGateOpenVpnManager.Tests.Services.OpenVpnTelnet.Fakes;
 using DataGateOpenVpnManager.Tests.Services.Proxy;
@@ -23,11 +24,16 @@ public class DiagnosticsControllerTests
         IOpenVpnManagementStatusCache? cache = null,
         IProxySessionAuditService? audit = null,
         IConfiguration? config = null,
-        OpenVpnProxyOptions? options = null)
+        OpenVpnProxyOptions? options = null,
+        IPiHoleRuntimeOptionsStore? runtimeOptions = null,
+        IPiHoleApiClient? piHoleApiClient = null)
     {
         var configuration = config ?? new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["DNS1"] = "10.51.15.1" })
             .Build();
+
+        var runtime = runtimeOptions ?? new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var piHole = piHoleApiClient ?? new Mock<IPiHoleApiClient>().Object;
 
         return new DiagnosticsController(
             configuration,
@@ -36,7 +42,16 @@ public class DiagnosticsControllerTests
             new ProxyTrafficFlowService(),
             cache ?? new OpenVpnManagementStatusCache(null!, new NoOpProxySessionAuditService(), NullLogger<OpenVpnManagementStatusCache>.Instance),
             audit ?? new ProxySessionAuditService(Options.Create(new OpenVpnProxyOptions { SessionAudit = true }), NullLogger<ProxySessionAuditService>.Instance),
+            runtime,
+            piHole,
             NullLogger<DiagnosticsController>.Instance);
+    }
+
+    private sealed class TestOptionsMonitor(PiHoleOptions current) : IOptionsMonitor<PiHoleOptions>
+    {
+        public PiHoleOptions CurrentValue { get; } = current;
+        public PiHoleOptions Get(string? name) => CurrentValue;
+        public IDisposable? OnChange(Action<PiHoleOptions, string?> listener) => null;
     }
 
     [Fact]

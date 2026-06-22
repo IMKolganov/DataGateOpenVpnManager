@@ -80,6 +80,15 @@ Environment variables:
 | `OpenVpnProxy__CloseZombieAfterMissingSeconds` | Close WSS when OpenVPN peer missing from management (`0` = off) | `0` |
 | `OpenVpnProxy__ZombieCheckIntervalSeconds` | How often to check for zombie proxy sessions | `30` |
 | `PROXY_BYTE_DEBUG`          | Legacy alias for `OpenVpnProxy__ByteDebug` (`1` / `true`) | _(unset)_ |
+| `PiHole__Enabled`             | Collect VPN DNS queries from Pi-hole API                  | `false` |
+| `PiHole__BaseUrl`             | Pi-hole FTL API base URL (same network namespace)         | `http://127.0.0.1:8080` |
+| `PiHole__AppPassword`         | Pi-hole application password for `/api/auth`              | _(empty)_ |
+| `PiHole__PollIntervalSeconds` | How often to poll Pi-hole query log                       | `60` |
+| `PiHole__BatchSize`           | Max queries per poll                                      | `200` |
+| `PIHOLE_ENABLED`              | Legacy env alias for `PiHole__Enabled`                    | _(unset)_ |
+| `PIHOLE_BASE_URL`             | Legacy env alias for `PiHole__BaseUrl`                    | _(unset)_ |
+| `PIHOLE_APP_PASSWORD`         | Legacy env alias for `PiHole__AppPassword`                | _(unset)_ |
+| `PIHOLE_POLL_INTERVAL_SEC`    | Legacy env alias for `PiHole__PollIntervalSeconds`        | _(unset)_ |
 
 ---
 
