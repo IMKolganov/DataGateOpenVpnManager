@@ -13,10 +13,15 @@ public static class PiHoleConfiguration
         services.AddSingleton<IPiHoleRuntimeOptionsStore, PiHoleRuntimeOptionsStore>();
         services.AddSingleton<IPiHoleCollectorStatusStore, PiHoleCollectorStatusStore>();
 
-        services.AddHttpClient<IPiHoleApiClient, PiHoleApiClient>(client =>
+        // Typed HttpClient is transient — each diagnostics request would open a new Pi-hole API session.
+        services.AddHttpClient(PiHoleApiClient.HttpClientName, client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
         });
+        services.AddSingleton<IPiHoleApiClient>(sp => new PiHoleApiClient(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(PiHoleApiClient.HttpClientName),
+            sp.GetRequiredService<IPiHoleRuntimeOptionsStore>(),
+            sp.GetRequiredService<ILogger<PiHoleApiClient>>()));
 
         services.AddSingleton<IPiHoleQueryCursorStore, PiHoleQueryCursorStore>();
         services.AddSingleton<IPiHoleClientIdentityResolver, PiHoleClientIdentityResolver>();

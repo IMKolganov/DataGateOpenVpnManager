@@ -142,7 +142,7 @@ public class PiHoleQueryCollectorHostedServiceTests
         hub.Setup(h => h.Clients).Returns(clients.Object);
 
         var status = new PiHoleCollectorStatusStore();
-        var sut = CreateSut(api.Object, cursor.Object, status, cache.Object, hub);
+        var sut = CreateSut(api.Object, cursor.Object, status, cache: cache.Object, hubClients: hub);
 
         var count = await sut.CollectOnceAsync(
             new PiHoleOptions { BatchSize = 50, LookbackSeconds = 60 },
@@ -157,10 +157,52 @@ public class PiHoleQueryCollectorHostedServiceTests
         Assert.Equal(0, snapshot.LastPollQueriesEnriched);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_StartsCollectingAfterRuntimeEnable()
+    {
+        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var api = new Mock<IPiHoleApiClient>();
+        api.Setup(x => x.GetQueriesSinceAsync(
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PiHoleQueryFetchResult { TotalFromApi = 0, Records = [] });
+
+        var status = new PiHoleCollectorStatusStore();
+        var sut = CreateSut(api.Object, new Mock<IPiHoleQueryCursorStore>().Object, status, store: store);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        _ = sut.StartAsync(cts.Token);
+        await Task.Delay(150, CancellationToken.None);
+        store.Apply(new PiHoleOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            AppPassword = "secret",
+            PollIntervalSeconds = 10,
+            BatchSize = 50,
+            LookbackSeconds = 60,
+        });
+
+        // First idle cycle is 5s; config must be applied before that wake-up.
+        await Task.Delay(5100, CancellationToken.None);
+
+        api.Verify(
+            x => x.GetQueriesSinceAsync(
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<DateTimeOffset>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.AtLeastOnce);
+        Assert.True(status.GetSnapshot().CollectorRunning || status.GetSnapshot().LastPollAtUtc is not null);
+    }
+
     private static PiHoleQueryCollectorHostedService CreateSut(
         IPiHoleApiClient api,
         IPiHoleQueryCursorStore cursor,
         IPiHoleCollectorStatusStore status,
+        IPiHoleRuntimeOptionsStore? store = null,
         IOpenVpnManagementStatusCache? cache = null,
         Mock<IHubContext<OpenVpnEventHub>>? hubClients = null)
     {
@@ -168,7 +210,7 @@ public class PiHoleQueryCollectorHostedServiceTests
         var hub = hubClients ?? CreateDefaultHub();
 
         return new PiHoleQueryCollectorHostedService(
-            new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions { Enabled = true })),
+            store ?? new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions { Enabled = true })),
             api,
             new PiHoleClientIdentityResolver(),
             cursor,

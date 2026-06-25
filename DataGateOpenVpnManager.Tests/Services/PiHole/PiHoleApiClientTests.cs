@@ -64,6 +64,132 @@ public class PiHoleApiClientTests
     }
 
     [Fact]
+    public async Task ProbeAsync_PostsValidJsonAuthBody()
+    {
+        string? authBody = null;
+        var calls = 0;
+        var handler = new StubHandler(req =>
+        {
+            calls++;
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.EndsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+            {
+                authBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"session":{"sid":"sid-1","validity":1800}}""")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"queries":[]}""")
+            };
+        });
+
+        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        store.Apply(new PiHoleOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            AppPassword = "datagate2019"
+        });
+
+        var sut = new PiHoleApiClient(new HttpClient(handler), store, NullLogger<PiHoleApiClient>.Instance);
+        await sut.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal("""{"password":"datagate2019"}""", authBody);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_ReusesExistingSession_OnSecondCall()
+    {
+        var authCalls = 0;
+        var handler = new StubHandler(req =>
+        {
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.EndsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+            {
+                authCalls++;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"session":{"sid":"sid-1","validity":1800}}""")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"queries":[]}""")
+            };
+        });
+
+        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        store.Apply(new PiHoleOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            AppPassword = "secret"
+        });
+
+        var sut = new PiHoleApiClient(new HttpClient(handler), store, NullLogger<PiHoleApiClient>.Instance);
+        await sut.ProbeAsync(CancellationToken.None);
+        await sut.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(1, authCalls);
+    }
+
+    [Fact]
+    public async Task SendGetAsync_LogsOutPreviousSession_WhenUnauthorized()
+    {
+        var logoutCalls = 0;
+        var authCalls = 0;
+        var queryCalls = 0;
+        var handler = new StubHandler(req =>
+        {
+            if (req.Method == HttpMethod.Delete && req.RequestUri!.AbsolutePath.EndsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+            {
+                logoutCalls++;
+                Assert.Contains("sid=session-1", req.RequestUri.Query, StringComparison.Ordinal);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath.EndsWith("/api/auth", StringComparison.OrdinalIgnoreCase))
+            {
+                authCalls++;
+                var sid = authCalls == 1 ? "session-1" : "session-2";
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"session\":{\"sid\":\"" + sid + "\",\"validity\":1800}}")
+                };
+            }
+
+            queryCalls++;
+            if (queryCalls >= 2)
+                return new HttpResponseMessage(HttpStatusCode.Unauthorized);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"queries":[]}""")
+            };
+        });
+
+        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        store.Apply(new PiHoleOptions
+        {
+            Enabled = true,
+            BaseUrl = "http://127.0.0.1:8080",
+            AppPassword = "secret"
+        });
+
+        var sut = new PiHoleApiClient(new HttpClient(handler), store, NullLogger<PiHoleApiClient>.Instance);
+        await sut.ProbeAsync(CancellationToken.None);
+        await sut.ProbeAsync(CancellationToken.None);
+
+        Assert.Equal(2, authCalls);
+        Assert.Equal(1, logoutCalls);
+        Assert.Equal(3, queryCalls);
+    }
+
+    [Fact]
     public async Task ProbeAsync_ReturnsDisabledMessage_WhenCollectorDisabled()
     {
         var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions { Enabled = false }));

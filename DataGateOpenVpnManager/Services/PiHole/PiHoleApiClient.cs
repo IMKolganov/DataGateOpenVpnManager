@@ -1,5 +1,7 @@
+using System.Net;
 using System.Text;
 using DataGateOpenVpnManager.Models;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace DataGateOpenVpnManager.Services.PiHole;
@@ -9,8 +11,13 @@ public sealed class PiHoleApiClient(
     IPiHoleRuntimeOptionsStore runtimeOptions,
     ILogger<PiHoleApiClient> logger) : IPiHoleApiClient
 {
+    public const string HttpClientName = "PiHole";
+
+    private static readonly TimeSpan AuthBackoff = TimeSpan.FromSeconds(60);
+
     private string? _sessionId;
     private DateTimeOffset _sessionExpiresUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _authBlockedUntilUtc = DateTimeOffset.MinValue;
     private readonly SemaphoreSlim _authLock = new(1, 1);
 
     public async Task<PiHoleQueryFetchResult> GetQueriesSinceAsync(
@@ -24,6 +31,8 @@ public sealed class PiHoleApiClient(
             return new PiHoleQueryFetchResult();
 
         await EnsureSessionAsync(options, cancellationToken);
+        if (string.IsNullOrWhiteSpace(_sessionId) && !string.IsNullOrWhiteSpace(options.AppPassword))
+            return new PiHoleQueryFetchResult();
 
         var fromUnix = fromUtc.ToUnixTimeSeconds();
         var untilUnix = untilUtc.ToUnixTimeSeconds();
@@ -86,6 +95,14 @@ public sealed class PiHoleApiClient(
         try
         {
             await EnsureSessionAsync(options, cancellationToken);
+            if (string.IsNullOrWhiteSpace(_sessionId))
+            {
+                if (DateTimeOffset.UtcNow < _authBlockedUntilUtc)
+                    return (false, 0, "Pi-hole API seats exceeded; retry after backoff.");
+
+                return (false, 0, "Pi-hole authentication failed (invalid app password or auth endpoint error).");
+            }
+
             var until = DateTimeOffset.UtcNow;
             var from = until.AddMinutes(-1);
             var url =
@@ -96,11 +113,7 @@ public sealed class PiHoleApiClient(
 
             var records = PiHoleQueryParser.ParseQueriesResponse(body);
             var filtered = PiHoleSubnetFilter.Apply(records, options.ClientSubnetPrefix);
-            var authenticated = string.IsNullOrWhiteSpace(options.AppPassword) || _sessionId is not null;
-            if (!authenticated)
-                return (false, filtered.Count, "Pi-hole authentication failed (invalid app password or auth endpoint error).");
-
-            return (authenticated, filtered.Count, null);
+            return (true, filtered.Count, null);
         }
         catch (Exception ex)
         {
@@ -109,7 +122,11 @@ public sealed class PiHoleApiClient(
         }
     }
 
-    private async Task<string?> SendGetAsync(PiHoleOptions options, string url, CancellationToken cancellationToken)
+    private async Task<string?> SendGetAsync(
+        PiHoleOptions options,
+        string url,
+        CancellationToken cancellationToken,
+        bool allowAuthRetry = true)
     {
         var target = BuildUri(options, url);
         using var request = new HttpRequestMessage(HttpMethod.Get, target);
@@ -118,6 +135,16 @@ public sealed class PiHoleApiClient(
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized && allowAuthRetry)
+        {
+            logger.LogDebug("Pi-hole GET {Url} returned 401; refreshing session.", url);
+            await InvalidateSessionAsync(options, cancellationToken);
+            await EnsureSessionAsync(options, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(_sessionId))
+                return await SendGetAsync(options, url, cancellationToken, allowAuthRetry: false);
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning(
@@ -139,23 +166,43 @@ public sealed class PiHoleApiClient(
         if (string.IsNullOrWhiteSpace(options.AppPassword))
             return;
 
+        if (DateTimeOffset.UtcNow < _authBlockedUntilUtc)
+            return;
+
         await _authLock.WaitAsync(cancellationToken);
         try
         {
             if (!string.IsNullOrWhiteSpace(_sessionId) && DateTimeOffset.UtcNow < _sessionExpiresUtc)
                 return;
 
+            if (DateTimeOffset.UtcNow < _authBlockedUntilUtc)
+                return;
+
+            var previousSessionId = _sessionId;
+            _sessionId = null;
+            _sessionExpiresUtc = DateTimeOffset.MinValue;
+            await LogoutSessionAsync(options, previousSessionId, cancellationToken);
+
             var authUrl = BuildUri(options, "api/auth");
+            var authPayload = JsonConvert.SerializeObject(new { password = options.AppPassword });
             using var request = new HttpRequestMessage(HttpMethod.Post, authUrl)
             {
-                Content = new StringContent(
-                    $"{{\"password\":{JValue.CreateString(options.AppPassword).ToString()}}}",
-                    Encoding.UTF8,
-                    "application/json")
+                Content = new StringContent(authPayload, Encoding.UTF8, "application/json")
             };
 
             using var response = await httpClient.SendAsync(request, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (response.StatusCode == (HttpStatusCode)429)
+            {
+                _authBlockedUntilUtc = DateTimeOffset.UtcNow.Add(AuthBackoff);
+                logger.LogWarning(
+                    "Pi-hole auth POST api/auth failed: BaseUrl={BaseUrl}, status=429, body={Body}. Backing off auth for {BackoffSec}s.",
+                    options.BaseUrl,
+                    Truncate(body, 200),
+                    (int)AuthBackoff.TotalSeconds);
+                return;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning(
@@ -163,7 +210,6 @@ public sealed class PiHoleApiClient(
                     options.BaseUrl,
                     (int)response.StatusCode,
                     Truncate(body, 200));
-                _sessionId = null;
                 return;
             }
 
@@ -178,6 +224,7 @@ public sealed class PiHoleApiClient(
 
             var validitySeconds = JObject.Parse(body)["session"]?["validity"]?.Value<int>() ?? 1800;
             _sessionExpiresUtc = DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, validitySeconds - 30));
+            _authBlockedUntilUtc = DateTimeOffset.MinValue;
             logger.LogInformation(
                 "Pi-hole API session established. BaseUrl={BaseUrl}, validitySec={ValiditySeconds}",
                 options.BaseUrl,
@@ -186,6 +233,40 @@ public sealed class PiHoleApiClient(
         finally
         {
             _authLock.Release();
+        }
+    }
+
+    private async Task InvalidateSessionAsync(PiHoleOptions options, CancellationToken cancellationToken)
+    {
+        var sessionId = _sessionId;
+        _sessionId = null;
+        _sessionExpiresUtc = DateTimeOffset.MinValue;
+        await LogoutSessionAsync(options, sessionId, cancellationToken);
+    }
+
+    private async Task LogoutSessionAsync(
+        PiHoleOptions options,
+        string? sessionId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return;
+
+        try
+        {
+            var logoutUrl = BuildUri(options, $"api/auth?sid={Uri.EscapeDataString(sessionId)}");
+            using var request = new HttpRequestMessage(HttpMethod.Delete, logoutUrl);
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogDebug(
+                    "Pi-hole session logout returned status={StatusCode}.",
+                    (int)response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Pi-hole session logout failed (non-fatal).");
         }
     }
 

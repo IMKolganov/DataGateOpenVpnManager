@@ -17,38 +17,59 @@ public sealed class PiHoleQueryCollectorHostedService(
     IHubContext<OpenVpnEventHub> eventHub,
     ILogger<PiHoleQueryCollectorHostedService> logger) : BackgroundService
 {
+    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(5);
+    private bool _collectorActive;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var cfg = runtimeOptions.GetEffective();
-        if (!cfg.Enabled)
-        {
-            statusStore.SetCollectorRunning(false);
-            logger.LogInformation("Pi-hole DNS collector not started: PiHole:Enabled=false.");
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(cfg.BaseUrl))
-        {
-            statusStore.SetCollectorRunning(false);
-            logger.LogWarning("Pi-hole DNS collector not started: BaseUrl is empty.");
-            return;
-        }
-
-        statusStore.SetCollectorRunning(true);
-        logger.LogInformation(
-            "Pi-hole DNS collector started. BaseUrl={BaseUrl}, IntervalSec={IntervalSec}, BatchSize={BatchSize}, LookbackSec={LookbackSec}, SubnetPrefix={SubnetPrefix}",
-            cfg.BaseUrl,
-            cfg.PollIntervalSeconds,
-            cfg.BatchSize,
-            cfg.LookbackSeconds,
-            cfg.ClientSubnetPrefix);
-
-        var interval = TimeSpan.FromSeconds(Math.Max(10, cfg.PollIntervalSeconds));
-
         while (!stoppingToken.IsCancellationRequested)
         {
-            cfg = runtimeOptions.GetEffective();
-            interval = TimeSpan.FromSeconds(Math.Max(10, cfg.PollIntervalSeconds));
+            var cfg = runtimeOptions.GetEffective();
+            if (!cfg.Enabled || string.IsNullOrWhiteSpace(cfg.BaseUrl))
+            {
+                if (_collectorActive)
+                {
+                    _collectorActive = false;
+                    statusStore.SetCollectorRunning(false);
+                    logger.LogInformation(
+                        "Pi-hole DNS collector paused. Enabled={Enabled}, HasBaseUrl={HasBaseUrl}.",
+                        cfg.Enabled,
+                        !string.IsNullOrWhiteSpace(cfg.BaseUrl));
+                }
+                else
+                {
+                    logger.LogDebug(
+                        "Pi-hole DNS collector idle. Enabled={Enabled}, HasBaseUrl={HasBaseUrl}.",
+                        cfg.Enabled,
+                        !string.IsNullOrWhiteSpace(cfg.BaseUrl));
+                }
+
+                try
+                {
+                    await Task.Delay(IdleDelay, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (!_collectorActive)
+            {
+                _collectorActive = true;
+                statusStore.SetCollectorRunning(true);
+                logger.LogInformation(
+                    "Pi-hole DNS collector started. BaseUrl={BaseUrl}, IntervalSec={IntervalSec}, BatchSize={BatchSize}, LookbackSec={LookbackSec}, SubnetPrefix={SubnetPrefix}",
+                    cfg.BaseUrl,
+                    cfg.PollIntervalSeconds,
+                    cfg.BatchSize,
+                    cfg.LookbackSeconds,
+                    cfg.ClientSubnetPrefix);
+            }
+
+            var interval = TimeSpan.FromSeconds(Math.Max(10, cfg.PollIntervalSeconds));
 
             try
             {
@@ -79,6 +100,7 @@ public sealed class PiHoleQueryCollectorHostedService(
             }
         }
 
+        _collectorActive = false;
         statusStore.SetCollectorRunning(false);
         logger.LogInformation("Pi-hole DNS collector stopped.");
     }
