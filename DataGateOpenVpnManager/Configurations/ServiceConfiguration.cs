@@ -55,6 +55,7 @@ public static class ServiceConfiguration
         services.AddHostedService<MicroserviceJwtValidatorInitializer>();
 
         services.ConfigureProxy(config);
+        services.ConfigurePiHole(config);
 
         services.AddControllers().AddNewtonsoftJson();
         services.AddEndpointsApiExplorer();

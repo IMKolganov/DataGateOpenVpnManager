@@ -3,6 +3,33 @@ using DataGateOpenVpnManager.Services.Interfaces;
 
 namespace DataGateOpenVpnManager.Middlewares;
 
+internal static class JwtValidationHttpContextExtensions
+{
+    internal static JwtValidationRequestContext ToJwtValidationRequestContext(this HttpContext context)
+    {
+        var path = context.Request.Path.HasValue ? context.Request.Path.Value! : "/";
+        var method = string.IsNullOrWhiteSpace(context.Request.Method) ? "GET" : context.Request.Method;
+        var userAgent = context.Request.Headers["User-Agent"].ToString();
+        return new JwtValidationRequestContext(
+            ResolveClientIp(context),
+            path,
+            method,
+            string.IsNullOrWhiteSpace(userAgent) ? null : userAgent);
+    }
+
+    private static string? ResolveClientIp(HttpContext ctx)
+    {
+        if (ctx.Request.Headers.TryGetValue("X-Forwarded-For", out var forwarded))
+        {
+            var first = forwarded.ToString().Split(',').Select(s => s.Trim()).FirstOrDefault();
+            if (!string.IsNullOrEmpty(first) && IPAddress.TryParse(first, out _))
+                return first;
+        }
+
+        return ctx.Connection.RemoteIpAddress?.ToString();
+    }
+}
+
 public class JwtValidationMiddleware(RequestDelegate next)
 {
     private static readonly string[] ExcludedPaths =
@@ -25,13 +52,15 @@ public class JwtValidationMiddleware(RequestDelegate next)
     {
         var requestPath = context.Request.Path;
         var token = ExtractToken(context);
+        var requestContext = context.ToJwtValidationRequestContext();
 
         // Allow unauthenticated access to Swagger and other excluded paths
         if (ExcludedPaths.Any(p => requestPath.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))
         {
             // For excluded paths we still attach principal when token is provided,
             // so endpoints like /api/proxy can enrich telemetry with user identity.
-            if (!string.IsNullOrWhiteSpace(token) && validator.ValidateToken(token, out var excludedPrincipal))
+            if (!string.IsNullOrWhiteSpace(token)
+                && validator.ValidateToken(token, out var excludedPrincipal, requestContext))
                 context.User = excludedPrincipal ?? throw new InvalidOperationException("Principal is null");
 
             await next(context);
@@ -48,7 +77,7 @@ public class JwtValidationMiddleware(RequestDelegate next)
         }
 
         // Validate token
-        if (!string.IsNullOrWhiteSpace(token) && validator.ValidateToken(token, out var principal))
+        if (!string.IsNullOrWhiteSpace(token) && validator.ValidateToken(token, out var principal, requestContext))
         {
             context.User = principal ?? throw new InvalidOperationException("Principal is null");
             await next(context);

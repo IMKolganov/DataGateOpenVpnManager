@@ -219,9 +219,9 @@ echo "===== Starting OpenVPN in background..."
 openvpn --config "$DATA_DIR/server.conf" &
 OPENVPN_PID=$!
 
-# 👇 Added: stream OpenVPN logs to Docker stdout
+# 👇 Stream OpenVPN logs to Docker stdout (suppress raw tls-crypt probe noise; enrichment service re-logs with origin tags)
 echo "===== Attaching OpenVPN log to stdout... ====="
-tail -F "$DATA_DIR/openvpn.log" &
+tail -F "$DATA_DIR/openvpn.log" | grep -viE 'TLS Error: tls-crypt|tls-crypt unwrap|tls-crypt unwrapp|packet authentication failed' &
 TAIL_PID=$!
 
 echo "[entrypoint] Starting .NET application..."

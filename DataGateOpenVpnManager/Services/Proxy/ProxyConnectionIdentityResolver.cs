@@ -15,11 +15,13 @@ public sealed class ProxyConnectionIdentityResolver : IProxyConnectionIdentityRe
         var userId = ResolveClaim(user, ClaimTypes.NameIdentifier, "sub", "userId", "uid");
         var username = ResolveClaim(user, ClaimTypes.Name, "preferred_username", "unique_name", "username");
         var email = ResolveClaim(user, ClaimTypes.Email, "email");
+        var userAgent = Normalize(context.Request.Headers.UserAgent.FirstOrDefault());
 
         if (string.IsNullOrWhiteSpace(userId) &&
             string.IsNullOrWhiteSpace(username) &&
             string.IsNullOrWhiteSpace(email) &&
-            string.IsNullOrWhiteSpace(clientRef))
+            string.IsNullOrWhiteSpace(clientRef) &&
+            string.IsNullOrWhiteSpace(userAgent))
             return null;
 
         return new ProxyConnectionIdentity
@@ -27,7 +29,8 @@ public sealed class ProxyConnectionIdentityResolver : IProxyConnectionIdentityRe
             ClientRef = clientRef,
             UserId = userId,
             Username = username,
-            Email = email
+            Email = email,
+            UserAgent = userAgent
         };
     }
 

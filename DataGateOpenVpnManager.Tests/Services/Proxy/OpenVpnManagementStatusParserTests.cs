@@ -52,6 +52,39 @@ public class OpenVpnManagementStatusParserTests
     }
 
     [Fact]
+    public void ParseClientList_ParsesOpenVpn27RealAddressFormat()
+    {
+        const string status =
+            """
+            CLIENT_LIST	adg-75-test	tcp4-server:127.0.0.1:53188	10.51.15.8		172526	374581	1782816170	UNDEF
+            END
+            """;
+
+        var clients = OpenVpnManagementStatusParser.ParseClientList(status);
+
+        Assert.Single(clients);
+        Assert.Equal("adg-75-test", clients[0].CommonName);
+        Assert.Equal("tcp4-server:127.0.0.1:53188", clients[0].RealAddress);
+        Assert.Equal("10.51.15.8", clients[0].VirtualAddress);
+    }
+
+    [Fact]
+    public void FindByLocalProxyPort_MatchesOpenVpn27Status3Row()
+    {
+        const string status =
+            """
+            CLIENT_LIST	adg-75-test	tcp4-server:127.0.0.1:53188	10.51.15.8		0	0	1782816170	UNDEF
+            END
+            """;
+
+        var clients = OpenVpnManagementStatusParser.ParseClientList(status);
+        var match = OpenVpnManagementStatusParser.FindByLocalProxyPort(clients, "127.0.0.1", 53188);
+
+        Assert.NotNull(match);
+        Assert.Equal("adg-75-test", match!.CommonName);
+    }
+
+    [Fact]
     public void ProxyByteComparison_ComputesDeltas()
     {
         var comparison = ProxyByteComparison.Create(1_000, 2_000, 950, 2_100);

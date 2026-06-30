@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using DataGateOpenVpnManager.Models;
+using DataGateOpenVpnManager.Services.PiHole;
 using DataGateOpenVpnManager.Services.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Diagnostics.Responses;
 using DataGateMonitor.SharedModels.Responses;
@@ -18,6 +19,10 @@ public class DiagnosticsController(
     IProxyTrafficFlowService trafficFlow,
     IOpenVpnManagementStatusCache statusCache,
     IProxySessionAuditService sessionAudit,
+    IPiHoleRuntimeOptionsStore runtimeOptions,
+    IPiHoleApiClient piHoleApiClient,
+    IPiHoleCollectorStatusStore statusStore,
+    IPiHoleQueryCursorStore cursorStore,
     ILogger<DiagnosticsController> logger) : ControllerBase
 {
     [HttpGet("proxy-audit")]
@@ -115,6 +120,28 @@ public class DiagnosticsController(
         {
             logger.LogError(ex, "Proxy session diagnostics failed");
             return BadRequest(ApiResponse<ProxySessionDiagnosticsResponse>.ErrorResponse(ex.Message));
+        }
+    }
+
+    [HttpGet("pi-hole")]
+    public async Task<ActionResult<ApiResponse<PiHoleDiagnosticsResponse>>> GetPiHoleDiagnostics(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var options = runtimeOptions.GetEffective();
+            var probe = await piHoleApiClient.ProbeAsync(cancellationToken);
+            var response = PiHoleDiagnosticsFactory.Create(
+                options,
+                statusStore.GetSnapshot(),
+                cursorStore.GetLastUntilUtc(),
+                probe);
+            return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(response));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Pi-hole diagnostics failed.");
+            return BadRequest(ApiResponse<PiHoleDiagnosticsResponse>.ErrorResponse(ex.Message));
         }
     }
 

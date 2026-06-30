@@ -333,6 +333,8 @@ public class OpenVpnProxyController(
         var connectDetails = ProxyAuditDetails.ForConnection(connection);
         if (identity?.ClientRef is not null)
             connectDetails["clientRef"] = identity.ClientRef;
+        if (identity?.UserAgent is not null)
+            connectDetails["userAgent"] = identity.UserAgent;
         sessionAudit.Record(new ProxySessionAuditEntry
         {
             AtUtc = DateTime.UtcNow,
