@@ -304,15 +304,14 @@ public class EasyRsaParseDbServiceTests
     public async Task ParseCertificateInfoInIndexFileAsync_RevokedClient_UsesRevokedDirectory()
     {
         var tempDir = CreatePkiRoot(out _);
-        Directory.CreateDirectory(Path.Combine(tempDir, "revoked"));
-        Directory.CreateDirectory(Path.Combine(tempDir, "private"));
+        Directory.CreateDirectory(Path.Combine(tempDir, "certs_by_serial"));
 
         const string cn = "revoked-client";
-        await File.WriteAllTextAsync(Path.Combine(tempDir, "revoked", $"{cn}.crt"), "revoked-cert");
-        await File.WriteAllTextAsync(Path.Combine(tempDir, "private", $"{cn}.key"), "revoked-key");
+        const string serial = "DEADBEEF";
+        await File.WriteAllTextAsync(Path.Combine(tempDir, "certs_by_serial", $"{serial}.pem"), "revoked-cert-pem");
         await File.WriteAllLinesAsync(Path.Combine(tempDir, "index.txt"), new[]
         {
-            "R\t400128120000Z\t400201100000Z\tDEADBEEF\tunknown\t/CN=revoked-client"
+            $"R\t400128120000Z\t400201100000Z\t{serial}\tunknown\t/CN={cn}"
         });
 
         try
@@ -320,10 +319,81 @@ public class EasyRsaParseDbServiceTests
             var service = new EasyRsaParseDbService(_loggerMock.Object);
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
-            Assert.Equal(Path.Combine(tempDir, "revoked", $"{cn}.crt"), result[0].CertificatePath);
-            Assert.Equal(Path.Combine(tempDir, "private", $"{cn}.key"), result[0].KeyPath);
+            Assert.Equal(Path.Combine(tempDir, "certs_by_serial", $"{serial}.pem"), result[0].CertificatePath);
+            Assert.Equal(string.Empty, result[0].KeyPath);
             Assert.True(result[0].IsRevoked);
             Assert.NotNull(result[0].RevokeDate);
+        }
+        finally
+        {
+            DeletePkiRoot(tempDir);
+        }
+    }
+
+    [Fact]
+    public async Task ParseCertificateInfoInIndexFileAsync_RevokedClientWithoutFiles_DoesNotWarn()
+    {
+        var tempDir = CreatePkiRoot(out _);
+        const string cn = "adg-75-106529657373562471831-n-Saz_jhQAGH1FuTPho1Xg";
+        await File.WriteAllLinesAsync(Path.Combine(tempDir, "index.txt"), new[]
+        {
+            $"R\t400128120000Z\t400201100000Z\tE28F6B5AE4BDAC22CD9B529921CEA960\tunknown\t/CN={cn}",
+            $"R\t400128120000Z\t400201100000Z\t0495F0103746B13EFED0BE0BB149C4EA\tunknown\t/CN={cn}",
+        });
+
+        try
+        {
+            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
+
+            Assert.Equal(2, result.Count);
+            Assert.All(result, r =>
+            {
+                Assert.Equal(cn, r.CommonName);
+                Assert.True(r.IsRevoked);
+                Assert.Equal(string.Empty, r.CertificatePath);
+                Assert.Equal(string.Empty, r.KeyPath);
+            });
+
+            _loggerMock.Verify(
+                x => x.Log(
+                    LogLevel.Warning,
+                    It.IsAny<EventId>(),
+                    It.IsAny<It.IsAnyType>(),
+                    It.IsAny<Exception?>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.Never);
+        }
+        finally
+        {
+            DeletePkiRoot(tempDir);
+        }
+    }
+
+    [Fact]
+    public async Task ParseCertificateInfoInIndexFileAsync_RevokedClient_UsesRevokedCertsBySerialDirectory()
+    {
+        var tempDir = CreatePkiRoot(out _);
+        Directory.CreateDirectory(Path.Combine(tempDir, "revoked", "certs_by_serial"));
+
+        const string cn = "revoked-client";
+        const string serial = "0495F0103746B13EFED0BE0BB149C4EA";
+        await File.WriteAllTextAsync(
+            Path.Combine(tempDir, "revoked", "certs_by_serial", $"{serial}.crt"),
+            "revoked-by-serial");
+        await File.WriteAllLinesAsync(Path.Combine(tempDir, "index.txt"), new[]
+        {
+            $"R\t400128120000Z\t400201100000Z\t{serial}\tunknown\t/CN={cn}"
+        });
+
+        try
+        {
+            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
+
+            Assert.Equal(
+                Path.Combine(tempDir, "revoked", "certs_by_serial", $"{serial}.crt"),
+                result[0].CertificatePath);
         }
         finally
         {

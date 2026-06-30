@@ -36,7 +36,7 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
                     var isRevoked = !string.IsNullOrEmpty(parts[2]);
                     var serial = parts[3];
 
-                    var (certPath, keyPath) = ResolveCertificateAndKeyPaths(pkiPath, commonName, serial, isRevoked);
+                    var (certPath, keyPath) = ResolveCertificateAndKeyPaths(pkiPath, commonName, serial, isRevoked, status);
 
                     result.Add(new ServerCertificate
                     {
@@ -66,11 +66,13 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
         string pkiPath,
         string commonName,
         string serial,
-        bool isRevoked)
+        bool isRevoked,
+        CertificateStatus status)
     {
         var issuedCertPath = Path.Combine(pkiPath, "issued", $"{commonName}.crt");
         var revokedCertPath = Path.Combine(pkiPath, "revoked", $"{commonName}.crt");
         var certsBySerialPath = Path.Combine(pkiPath, "certs_by_serial", $"{serial}.pem");
+        var revokedCertsBySerialCrtPath = Path.Combine(pkiPath, "revoked", "certs_by_serial", $"{serial}.crt");
         var caCertPath = Path.Combine(pkiPath, "ca.crt");
         var serverCertPath = Path.Combine(pkiPath, "issued", $"{ServerCertCommonName}.crt");
 
@@ -78,10 +80,11 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
 
         if (isRevoked)
         {
-            if (File.Exists(revokedCertPath))
-                resolvedCertPath = revokedCertPath;
-            else if (File.Exists(certsBySerialPath))
-                resolvedCertPath = certsBySerialPath;
+            resolvedCertPath = ResolveRevokedCertificatePath(
+                certsBySerialPath,
+                revokedCertsBySerialCrtPath,
+                revokedCertPath,
+                serial);
         }
         else if (File.Exists(issuedCertPath))
         {
@@ -101,20 +104,58 @@ public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEa
             resolvedCertPath = serverCertPath;
         }
 
-        var resolvedKeyPath = ResolvePrivateKeyPath(pkiPath, commonName, serial, resolvedCertPath, caCertPath, serverCertPath);
+        var resolvedKeyPath = isRevoked
+            ? ResolvePrivateKeyPathIfPresent(pkiPath, commonName, serial, resolvedCertPath, caCertPath, serverCertPath)
+            : ResolvePrivateKeyPath(pkiPath, commonName, serial, resolvedCertPath, caCertPath, serverCertPath);
 
-        if (string.IsNullOrEmpty(resolvedCertPath))
+        if (string.IsNullOrEmpty(resolvedCertPath) && ShouldWarnMissingCertificate(isRevoked, status))
         {
             logger.LogWarning("Certificate file not found for CommonName={CommonName}, Serial={Serial}", commonName, serial);
         }
 
-        if (string.IsNullOrEmpty(resolvedKeyPath))
+        if (string.IsNullOrEmpty(resolvedKeyPath) && ShouldWarnMissingPrivateKey(isRevoked, status))
         {
             logger.LogWarning("Private key file not found for CommonName={CommonName}", commonName);
         }
 
         return (resolvedCertPath ?? string.Empty, resolvedKeyPath ?? string.Empty);
     }
+
+    /// <summary>
+    /// Revoked certs are keyed by serial in Easy-RSA; <c>revoked/{cn}.crt</c> only reflects the latest revoke for that CN.
+    /// </summary>
+    private static string? ResolveRevokedCertificatePath(
+        string certsBySerialPath,
+        string revokedCertsBySerialCrtPath,
+        string revokedCertPath,
+        string serial)
+    {
+        if (File.Exists(certsBySerialPath))
+            return certsBySerialPath;
+
+        if (File.Exists(revokedCertsBySerialCrtPath))
+            return revokedCertsBySerialCrtPath;
+
+        if (File.Exists(revokedCertPath) && SerialMatchesCertificateFile(revokedCertPath, serial))
+            return revokedCertPath;
+
+        return null;
+    }
+
+    private static bool ShouldWarnMissingCertificate(bool isRevoked, CertificateStatus status) =>
+        !isRevoked && status == CertificateStatus.Active;
+
+    private static bool ShouldWarnMissingPrivateKey(bool isRevoked, CertificateStatus status) =>
+        !isRevoked && status == CertificateStatus.Active;
+
+    private static string? ResolvePrivateKeyPathIfPresent(
+        string pkiPath,
+        string commonName,
+        string serial,
+        string? resolvedCertPath,
+        string caCertPath,
+        string serverCertPath) =>
+        ResolvePrivateKeyPath(pkiPath, commonName, serial, resolvedCertPath, caCertPath, serverCertPath);
 
     /// <summary>
     /// Easy-RSA stores the CA in <c>pki/ca.crt</c> while <c>index.txt</c> uses the CA subject CN
