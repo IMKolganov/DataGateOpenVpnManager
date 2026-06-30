@@ -56,13 +56,48 @@ public class JwtValidationMiddlewareTests
     }
 
     [Fact]
+    public async Task Invoke_WhenPathIsExcludedAndBearerTokenInvalid_PassesRequestContextToValidator()
+    {
+        var nextCalled = false;
+        RequestDelegate next = _ => { nextCalled = true; return Task.CompletedTask; };
+        JwtValidationRequestContext? capturedContext = null;
+        var validatorMock = new Mock<IMicroserviceJwtValidator>();
+        validatorMock
+            .Setup(v => v.ValidateToken(
+                It.IsAny<string>(),
+                out It.Ref<ClaimsPrincipal?>.IsAny,
+                It.IsAny<JwtValidationRequestContext?>()))
+            .Callback((string _, out ClaimsPrincipal? principal, JwtValidationRequestContext? ctx) =>
+            {
+                principal = null;
+                capturedContext = ctx;
+            })
+            .Returns(false);
+        var middleware = new JwtValidationMiddleware(next);
+
+        var context = CreateContext(
+            "/api/proxy/ws",
+            IPAddress.Parse("10.20.30.40"),
+            authHeader: "Bearer bad-token");
+        context.Request.Headers["User-Agent"] = "ProbeBot/2";
+        await middleware.Invoke(context, validatorMock.Object);
+
+        Assert.True(nextCalled);
+        Assert.NotNull(capturedContext);
+        Assert.Equal("10.20.30.40", capturedContext!.RemoteIp);
+        Assert.Equal("/api/proxy/ws", capturedContext.Path);
+        Assert.Equal("GET", capturedContext.Method);
+        Assert.Equal("ProbeBot/2", capturedContext.UserAgent);
+    }
+
+    [Fact]
     public async Task Invoke_WhenPathIsExcludedAndBearerTokenValid_AttachesPrincipal()
     {
         var nextCalled = false;
         RequestDelegate next = _ => { nextCalled = true; return Task.CompletedTask; };
         ClaimsPrincipal? principal = new ClaimsPrincipal(new ClaimsIdentity("Test"));
         var validatorMock = new Mock<IMicroserviceJwtValidator>();
-        validatorMock.Setup(v => v.ValidateToken("valid-token", out principal)).Returns(true);
+        validatorMock.Setup(v => v.ValidateToken("valid-token", out principal, It.IsAny<JwtValidationRequestContext?>())).Returns(true);
         var middleware = new JwtValidationMiddleware(next);
 
         var context = CreateContext("/api/proxy", authHeader: "Bearer valid-token");
@@ -113,7 +148,7 @@ public class JwtValidationMiddlewareTests
         RequestDelegate next = _ => { nextCalled = true; return Task.CompletedTask; };
         var principal = new ClaimsPrincipal(new ClaimsIdentity("Test"));
         var validatorMock = new Mock<IMicroserviceJwtValidator>();
-        validatorMock.Setup(v => v.ValidateToken(It.IsAny<string>(), out principal)).Returns(true);
+        validatorMock.Setup(v => v.ValidateToken(It.IsAny<string>(), out principal, It.IsAny<JwtValidationRequestContext?>())).Returns(true);
 
         var middleware = new JwtValidationMiddleware(next);
         var context = CreateContext("/api/certs/get-all", IPAddress.Parse("10.0.0.1"), "Bearer valid-token");
@@ -143,7 +178,7 @@ public class JwtValidationMiddlewareTests
         RequestDelegate next = _ => { nextCalled = true; return Task.CompletedTask; };
         ClaimsPrincipal? principal = new ClaimsPrincipal(new ClaimsIdentity("Test"));
         var validatorMock = new Mock<IMicroserviceJwtValidator>();
-        validatorMock.Setup(v => v.ValidateToken("query-token", out principal)).Returns(true);
+        validatorMock.Setup(v => v.ValidateToken("query-token", out principal, It.IsAny<JwtValidationRequestContext?>())).Returns(true);
 
         var middleware = new JwtValidationMiddleware(next);
         var context = CreateContext("/api/info", null, null, "query-token");
