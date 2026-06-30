@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: local-openvpn-test:2.6.17-net10
+    image: local-openvpn-test:2.7.4-net10
     pull_policy: never
     container_name: openvpn-udp-local
     restart: unless-stopped

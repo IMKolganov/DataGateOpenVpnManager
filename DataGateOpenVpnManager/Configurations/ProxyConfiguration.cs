@@ -1,4 +1,5 @@
 using DataGateOpenVpnManager.Models;
+using DataGateOpenVpnManager.Services.OpenVpnTls;
 using DataGateOpenVpnManager.Services.Proxy;
 
 namespace DataGateOpenVpnManager.Configurations;
@@ -23,6 +24,8 @@ public static class ProxyConfiguration
         services.AddHostedService<ProxyTrafficFlowBroadcastService>();
         services.AddHostedService<ProxyByteDebugMonitorService>();
         services.AddHostedService<ProxyZombieConnectionMonitorService>();
+        services.AddSingleton<IOpenVpnTlsErrorClassifier, OpenVpnTlsErrorClassifier>();
+        services.AddHostedService<OpenVpnTlsLogEnrichmentHostedService>();
     }
 
     private static void ApplyLegacyByteDebugEnv(IConfiguration config, OpenVpnProxyOptions options)

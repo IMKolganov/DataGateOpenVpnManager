@@ -23,6 +23,7 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
             identity?.UserId,
             identity?.Username,
             identity?.Email,
+            identity?.UserAgent,
             connection.LocalProxyIp,
             connection.LocalProxyPort,
             connection.TargetIp,
@@ -207,6 +208,43 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
         return result;
     }
 
+    public bool TryGetIdentityByLocalProxy(int localProxyPort, string? host, out ProxyTrafficIdentitySnapshot? identity)
+    {
+        identity = null;
+        if (localProxyPort is < 1 or > 65535)
+            return false;
+
+        var needle = ActiveProxyConnectionService.NormalizeHost(host);
+        foreach (var state in _connections.Values)
+        {
+            if (state.LocalProxyPort != localProxyPort)
+                continue;
+            if (!HostsEqual(state.LocalProxyIp, needle))
+                continue;
+
+            identity = new ProxyTrafficIdentitySnapshot
+            {
+                ConnectionId = state.ConnectionId,
+                ClientRef = state.ClientRef,
+                UserId = state.UserId,
+                Username = state.Username,
+                Email = state.Email,
+                UserAgent = state.UserAgent,
+                RealClientIp = state.RealClientIp,
+                RealClientPort = state.RealClientPort,
+                LocalProxyIp = state.LocalProxyIp,
+                LocalProxyPort = state.LocalProxyPort
+            };
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool HostsEqual(string? localProxyIp, string needleNormalized) =>
+        string.Equals(ActiveProxyConnectionService.NormalizeHost(localProxyIp), needleNormalized,
+            StringComparison.OrdinalIgnoreCase);
+
     private sealed class FlowConnectionState
     {
         public FlowConnectionState(
@@ -218,6 +256,7 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
             string? userId,
             string? username,
             string? email,
+            string? userAgent,
             string? localProxyIp,
             int localProxyPort,
             string? targetIp,
@@ -232,6 +271,7 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
             UserId = userId;
             Username = username;
             Email = email;
+            UserAgent = userAgent;
             LocalProxyIp = localProxyIp;
             LocalProxyPort = localProxyPort;
             TargetIp = targetIp;
@@ -249,6 +289,7 @@ public sealed class ProxyTrafficFlowService : IProxyTrafficFlowService
         public string? UserId { get; }
         public string? Username { get; }
         public string? Email { get; }
+        public string? UserAgent { get; }
         public string? LocalProxyIp { get; }
         public int LocalProxyPort { get; }
         public string? TargetIp { get; }

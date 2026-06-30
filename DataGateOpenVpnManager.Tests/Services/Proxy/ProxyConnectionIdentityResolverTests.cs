@@ -43,6 +43,19 @@ public class ProxyConnectionIdentityResolverTests
     }
 
     [Fact]
+    public void Resolve_CapturesUserAgent_WhenPresent()
+    {
+        var resolver = new ProxyConnectionIdentityResolver();
+        var context = new DefaultHttpContext();
+        context.Request.Headers.UserAgent = "DataGateVPN/3.1 (Android 14)";
+
+        var result = resolver.Resolve(context, null);
+
+        Assert.NotNull(result);
+        Assert.Equal("DataGateVPN/3.1 (Android 14)", result!.UserAgent);
+    }
+
+    [Fact]
     public void Resolve_PrefersPrimaryClaims_InConfiguredOrder()
     {
         var resolver = new ProxyConnectionIdentityResolver();

@@ -37,6 +37,36 @@ public class PiHoleClientIdentityResolverTests
     }
 
     [Fact]
+    public void Enrich_MapsVirtualAddressToCommonName_WhenRealAddressUsesOpenVpn27Format()
+    {
+        var snapshot = new OpenVpnManagementStatusSnapshot(
+            DateTime.UtcNow,
+            "raw",
+            new[]
+            {
+                new OpenVpnManagementClientEntry(
+                    "user-cert-27",
+                    "tcp4-server:127.0.0.1:53188",
+                    "10.51.30.5",
+                    100,
+                    200,
+                    1719043200)
+            },
+            true);
+
+        var resolver = new PiHoleClientIdentityResolver();
+        var enriched = resolver.Enrich(
+            new[]
+            {
+                new PiHoleQueryRecord(3, "10.51.30.5", "example.com", "A", "FORWARDED", DateTimeOffset.UtcNow)
+            },
+            snapshot);
+
+        Assert.Single(enriched);
+        Assert.Equal("user-cert-27", enriched[0].CommonName);
+    }
+
+    [Fact]
     public void Enrich_LeavesCommonNameNull_WhenClientUnknown()
     {
         var resolver = new PiHoleClientIdentityResolver();

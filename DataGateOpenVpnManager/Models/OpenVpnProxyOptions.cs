@@ -49,6 +49,13 @@ public sealed class OpenVpnProxyOptions
     public int ZombieCheckIntervalSeconds { get; set; } = 30;
 
     /// <summary>
+    /// Tail <c>openvpn.log</c> and emit tagged TLS/tls-crypt lines for Wazuh
+    /// (<c>[OpenVpnTlsExternalProbe]</c> vs <c>[OpenVpnTlsAppClient]</c>).
+    /// Env: <c>OpenVpnProxy__TlsLogEnrichmentEnabled</c> (default true).
+    /// </summary>
+    public bool TlsLogEnrichmentEnabled { get; set; } = true;
+
+    /// <summary>
     /// Single shared OpenVPN management status poll interval (seconds).
     /// Env: <c>OpenVpnProxy__ManagementStatusRefreshSeconds</c>.
     /// </summary>

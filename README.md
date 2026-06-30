@@ -79,6 +79,7 @@ Environment variables:
 | `OpenVpnProxy__ByteDebugIntervalSeconds` | Periodic byte comparison while connected (`0` = on disconnect only) | `0` |
 | `OpenVpnProxy__CloseZombieAfterMissingSeconds` | Close WSS when OpenVPN peer missing from management (`0` = off) | `0` |
 | `OpenVpnProxy__ZombieCheckIntervalSeconds` | How often to check for zombie proxy sessions | `30` |
+| `OpenVpnProxy__TlsLogEnrichmentEnabled` | Tag tls-crypt errors as external probe vs app client (for Wazuh) | `true` |
 | `PROXY_BYTE_DEBUG`          | Legacy alias for `OpenVpnProxy__ByteDebug` (`1` / `true`) | _(unset)_ |
 | `PiHole__Enabled`             | Collect VPN DNS queries from Pi-hole API                  | `false` |
 | `PiHole__BaseUrl`             | Pi-hole FTL API base URL (same network namespace)         | `http://127.0.0.1:8080` |
@@ -118,6 +119,16 @@ Log files in `$DATA_DIR`:
 
 * `openvpn.log`
 * `openvpn-status.log`
+
+Raw `tls-crypt unwrapping failed` lines from internet scanners are **filtered out of Docker stdout**; the .NET app re-emits them with an origin tag:
+
+| Log prefix | Meaning | Suggested Wazuh level |
+|------------|---------|------------------------|
+| `[OpenVpnTlsExternalProbe]` | Direct probe to OpenVPN port (not our WSS app) | ignore / low |
+| `[OpenVpnTlsAppClient]` | WSS proxy path (`127.0.0.1:localPort`) with `clientRef` / `User-Agent` | alert |
+| `[OpenVpnTlsLocalUnknown]` | Loopback without matched proxy session | investigate |
+
+Wazuh rule **100913** should match `[OpenVpnTlsAppClient]` instead of the raw `TLS Error: tls-crypt` string.
 
 ---
 

@@ -6,4 +6,5 @@ public sealed class ProxyConnectionIdentity
     public string? UserId { get; init; }
     public string? Username { get; init; }
     public string? Email { get; init; }
+    public string? UserAgent { get; init; }
 }

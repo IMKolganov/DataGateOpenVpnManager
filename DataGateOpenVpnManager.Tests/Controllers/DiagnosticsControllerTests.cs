@@ -122,6 +122,19 @@ public class DiagnosticsControllerTests
     [Fact]
     public async Task GetProxySessions_ReportsLiveSession_WhenPeerInManagement()
     {
+        await AssertLiveSessionAsync(
+            "CLIENT_LIST\tadg-77\t127.0.0.1:60123\t10.51.16.3\t\t1000\t2000\t1748337500\tUNDEF\nEND");
+    }
+
+    [Fact]
+    public async Task GetProxySessions_ReportsLiveSession_WhenPeerUsesOpenVpn27RealAddress()
+    {
+        await AssertLiveSessionAsync(
+            "CLIENT_LIST\tadg-77\ttcp4-server:127.0.0.1:60123\t10.51.16.3\t\t1000\t2000\t1748337500\tUNDEF\nEND");
+    }
+
+    private static async Task AssertLiveSessionAsync(string managementPayload)
+    {
         var active = new ActiveProxyConnectionService();
         active.Add(new ActiveProxyConnection
         {
@@ -140,8 +153,7 @@ public class DiagnosticsControllerTests
         var management = new OpenVpnManagementSignalService(telnet, NullLogger<CommandQueue>.Instance);
         var cache = new OpenVpnManagementStatusCache(management, new NoOpProxySessionAuditService(), NullLogger<OpenVpnManagementStatusCache>.Instance);
         var refreshTask = cache.RefreshAsync(CancellationToken.None);
-        telnet.SimulateIncomingData(
-            "CLIENT_LIST\tadg-77\t127.0.0.1:60123\t10.51.16.3\t\t1000\t2000\t1748337500\tUNDEF\nEND");
+        telnet.SimulateIncomingData(managementPayload);
         await refreshTask;
 
         var controller = CreateController(active, cache);
