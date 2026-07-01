@@ -42,7 +42,7 @@ public class PiHoleApiClientTests
         });
 
         var client = new HttpClient(handler) { BaseAddress = new Uri("http://127.0.0.1:8080/") };
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions
         {
             Enabled = true,
@@ -86,7 +86,7 @@ public class PiHoleApiClientTests
             };
         });
 
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions
         {
             Enabled = true,
@@ -122,7 +122,7 @@ public class PiHoleApiClientTests
             };
         });
 
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions
         {
             Enabled = true,
@@ -172,7 +172,7 @@ public class PiHoleApiClientTests
             };
         });
 
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions
         {
             Enabled = true,
@@ -192,7 +192,7 @@ public class PiHoleApiClientTests
     [Fact]
     public async Task ProbeAsync_ReturnsDisabledMessage_WhenCollectorDisabled()
     {
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions { Enabled = false }));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create(new PiHoleOptions { Enabled = false });
         var sut = new PiHoleApiClient(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK))), store, NullLogger<PiHoleApiClient>.Instance);
 
         var (authenticated, count, error) = await sut.ProbeAsync(CancellationToken.None);
@@ -220,7 +220,7 @@ public class PiHoleApiClientTests
                 };
         });
 
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions
         {
             Enabled = true,
@@ -262,7 +262,7 @@ public class PiHoleApiClientTests
                 """)
         });
 
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions
         {
             Enabled = true,

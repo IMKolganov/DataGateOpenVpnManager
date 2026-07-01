@@ -68,4 +68,19 @@ public class PiHoleDiagnosticsFactoryTests
         Assert.False(response.Authenticated);
         Assert.Equal("Connection refused", response.Error);
     }
+
+    [Fact]
+    public void Create_UsesPersistedAppliedAtWhenInMemoryStatusMissing()
+    {
+        var persistedAppliedAt = DateTimeOffset.UtcNow.AddHours(-2);
+
+        var response = PiHoleDiagnosticsFactory.Create(
+            new PiHoleOptions { Enabled = true, BaseUrl = "http://pi-hole:8080", AppPassword = "secret" },
+            new PiHoleCollectorStatusSnapshot { CollectorRunning = true },
+            null,
+            (Authenticated: true, SampleQueryCount: 1, Error: null),
+            persistedAppliedAt);
+
+        Assert.Equal(persistedAppliedAt.UtcDateTime, response.RuntimeConfigAppliedAtUtc);
+    }
 }

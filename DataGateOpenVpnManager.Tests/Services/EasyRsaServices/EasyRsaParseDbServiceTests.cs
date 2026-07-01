@@ -1,8 +1,10 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.EasyRsaServices;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using DataGateMonitor.SharedModels.Enums;
 
@@ -11,6 +13,9 @@ namespace DataGateOpenVpnManager.Tests.Services.EasyRsaServices;
 public class EasyRsaParseDbServiceTests
 {
     private readonly Mock<ILogger<IEasyRsaParseDbService>> _loggerMock = new();
+
+    private EasyRsaParseDbService CreateService(EasyRsaOptions? options = null) =>
+        new(_loggerMock.Object, Options.Create(options ?? new EasyRsaOptions()));
 
     [Fact]
     public async Task ParseCertificateInfoInIndexFileAsync_WhenFileExists_ParsesLines()
@@ -25,7 +30,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(2, result.Count);
@@ -54,7 +59,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
 
             var ex = await Assert.ThrowsAsync<FileNotFoundException>(() =>
                 service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None));
@@ -76,7 +81,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Empty(result);
@@ -99,7 +104,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Single(result);
@@ -134,7 +139,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(Path.Combine(tempDir, "ca.crt"), result[0].CertificatePath);
@@ -164,7 +169,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(Path.Combine(tempDir, "certs_by_serial", $"{serial}.pem"), result[0].CertificatePath);
@@ -200,7 +205,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(Path.Combine(tempDir, "issued", "server.crt"), result[0].CertificatePath);
@@ -237,7 +242,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(3, result.Count);
@@ -289,7 +294,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(Path.Combine(tempDir, "issued", $"{cn}.crt"), result[0].CertificatePath);
@@ -316,7 +321,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(Path.Combine(tempDir, "certs_by_serial", $"{serial}.pem"), result[0].CertificatePath);
@@ -343,7 +348,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(2, result.Count);
@@ -388,7 +393,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(
@@ -412,7 +417,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal("ghost-client", result[0].CommonName);
@@ -451,7 +456,7 @@ public class EasyRsaParseDbServiceTests
 
         try
         {
-            var service = new EasyRsaParseDbService(_loggerMock.Object);
+            var service = CreateService();
             var result = await service.ParseCertificateInfoInIndexFileAsync(tempDir, CancellationToken.None);
 
             Assert.Equal(Path.Combine(tempDir, "issued", $"{cn}.crt"), result[0].CertificatePath);

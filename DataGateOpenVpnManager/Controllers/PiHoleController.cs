@@ -64,7 +64,8 @@ public class PiHoleController(
                 options,
                 statusStore.GetSnapshot(),
                 cursorStore.GetLastUntilUtc(),
-                probe);
+                probe,
+                runtimeOptions.PersistedAppliedAtUtc);
             return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(response));
         }
         catch (Exception ex)

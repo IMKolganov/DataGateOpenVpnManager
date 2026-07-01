@@ -91,6 +91,8 @@ Environment variables:
 | `PIHOLE_APP_PASSWORD`         | Legacy env alias for `PiHole__AppPassword`                | _(unset)_ |
 | `PIHOLE_POLL_INTERVAL_SEC`    | Legacy env alias for `PiHole__PollIntervalSeconds`        | _(unset)_ |
 
+**Pi-hole config priority (highest wins):** `PIHOLE_*` / `PiHole__*` env vars → dashboard **Save & apply** (`$DATA_DIR/pihole-runtime-config.json`) → `appsettings` defaults. Env overrides only the fields that are set.
+
 ---
 
 ## 📁 Directory Layout Inside Container
@@ -119,6 +121,8 @@ Log files in `$DATA_DIR`:
 
 * `openvpn.log`
 * `openvpn-status.log`
+* `pihole-query-cursor.txt` — last Pi-hole query log cursor (pre-created by entrypoint, mode `644`)
+* `pihole-runtime-config.json` — Pi-hole collector config from dashboard **Save & apply** (survives container restart; mode `600`, re-applied on each container start)
 
 Raw `tls-crypt unwrapping failed` lines from internet scanners are **filtered out of Docker stdout**; the .NET app re-emits them with an origin tag:
 

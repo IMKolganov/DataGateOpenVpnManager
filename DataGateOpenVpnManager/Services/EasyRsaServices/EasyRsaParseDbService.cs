@@ -1,19 +1,22 @@
 ﻿using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
+using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 using DataGateMonitor.SharedModels.Enums;
+using Microsoft.Extensions.Options;
 
 namespace DataGateOpenVpnManager.Services.EasyRsaServices;
 
-public class EasyRsaParseDbService(ILogger<IEasyRsaParseDbService> logger) : IEasyRsaParseDbService
+public class EasyRsaParseDbService(
+    ILogger<IEasyRsaParseDbService> logger,
+    IOptions<EasyRsaOptions> options) : IEasyRsaParseDbService
 {
-    private const string Filename = "index.txt"; // TODO: Load from config if needed
     private const string ServerCertCommonName = "server";
 
     public async Task<List<ServerCertificate>> ParseCertificateInfoInIndexFileAsync(string pkiPath, CancellationToken cancellationToken)
     {
-        var indexFilePath = Path.Combine(pkiPath, Filename);
+        var indexFilePath = Path.Combine(pkiPath, options.Value.IndexFileName);
 
         if (!File.Exists(indexFilePath))
             throw new FileNotFoundException(indexFilePath);

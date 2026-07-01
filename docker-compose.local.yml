@@ -39,6 +39,16 @@ services:
 
       BACKEND__BASEURL: "http://localhost:5581/"
 
+      # Pi-hole DNS collector — optional baseline config (survives container restart).
+      # Dashboard "Save & apply" overrides these values in memory until recreate.
+      # PIHOLE_ENABLED: "true"
+      # PIHOLE_BASE_URL: "http://pi-hole:8080"
+      # PIHOLE_APP_PASSWORD: "your-app-password"
+      # PIHOLE_POLL_INTERVAL_SEC: "60"
+      # PIHOLE_BATCH_SIZE: "500"
+      # PIHOLE_LOOKBACK_SEC: "120"
+      # PIHOLE_CLIENT_SUBNET_PREFIX: "10.50.28."
+
       WAN_IF: eth0
       VPN_SUBNET: "10.50.28.0"
       VPN_NETMASK: "255.255.255.0"
