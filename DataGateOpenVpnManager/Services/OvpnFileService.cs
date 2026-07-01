@@ -1,10 +1,15 @@
-﻿using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
+﻿using DataGateOpenVpnManager.Models;
+using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
+using Microsoft.Extensions.Options;
 
 namespace DataGateOpenVpnManager.Services;
 
-public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService easyRsaService)
+public class OvpnFileService(
+    ILogger<IOvpnFileService> logger,
+    IEasyRsaService easyRsaService,
+    IOptions<EasyRsaOptions> options)
     : IOvpnFileService
 {
     public async Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string friendlyΝame,
@@ -29,7 +34,7 @@ public class OvpnFileService(ILogger<IOvpnFileService> logger, IEasyRsaService e
         var clientKeyContent =
             await File.ReadAllTextAsync(certResult.KeyPath ?? throw new InvalidOperationException("KeyPath is null."),
                 cancellationToken);
-        var taKeyPath = Path.Combine(easyRsaPath, "pki", "ta.key");
+        var taKeyPath = Path.Combine(easyRsaPath, "pki", options.Value.TaKeyFileName);
         var taKeyContent =
             await  File.ReadAllTextAsync(taKeyPath ?? throw new InvalidOperationException("TaCertPath is null."),
                 cancellationToken);

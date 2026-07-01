@@ -79,7 +79,19 @@ Environment variables:
 | `OpenVpnProxy__ByteDebugIntervalSeconds` | Periodic byte comparison while connected (`0` = on disconnect only) | `0` |
 | `OpenVpnProxy__CloseZombieAfterMissingSeconds` | Close WSS when OpenVPN peer missing from management (`0` = off) | `0` |
 | `OpenVpnProxy__ZombieCheckIntervalSeconds` | How often to check for zombie proxy sessions | `30` |
+| `OpenVpnProxy__TlsLogEnrichmentEnabled` | Tag tls-crypt errors as external probe vs app client (for Wazuh) | `true` |
 | `PROXY_BYTE_DEBUG`          | Legacy alias for `OpenVpnProxy__ByteDebug` (`1` / `true`) | _(unset)_ |
+| `PiHole__Enabled`             | Collect VPN DNS queries from Pi-hole API                  | `false` |
+| `PiHole__BaseUrl`             | Pi-hole FTL API base URL (same network namespace)         | `http://127.0.0.1:8080` |
+| `PiHole__AppPassword`         | Pi-hole application password for `/api/auth`              | _(empty)_ |
+| `PiHole__PollIntervalSeconds` | How often to poll Pi-hole query log                       | `60` |
+| `PiHole__BatchSize`           | Max queries per poll                                      | `200` |
+| `PIHOLE_ENABLED`              | Legacy env alias for `PiHole__Enabled`                    | _(unset)_ |
+| `PIHOLE_BASE_URL`             | Legacy env alias for `PiHole__BaseUrl`                    | _(unset)_ |
+| `PIHOLE_APP_PASSWORD`         | Legacy env alias for `PiHole__AppPassword`                | _(unset)_ |
+| `PIHOLE_POLL_INTERVAL_SEC`    | Legacy env alias for `PiHole__PollIntervalSeconds`        | _(unset)_ |
+
+**Pi-hole config priority (highest wins):** `PIHOLE_*` / `PiHole__*` env vars → dashboard **Save & apply** (`$DATA_DIR/pihole-runtime-config.json`) → `appsettings` defaults. Env overrides only the fields that are set.
 
 ---
 
@@ -109,6 +121,18 @@ Log files in `$DATA_DIR`:
 
 * `openvpn.log`
 * `openvpn-status.log`
+* `pihole-query-cursor.txt` — last Pi-hole query log cursor (pre-created by entrypoint, mode `644`)
+* `pihole-runtime-config.json` — Pi-hole collector config from dashboard **Save & apply** (survives container restart; mode `600`, re-applied on each container start)
+
+Raw `tls-crypt unwrapping failed` lines from internet scanners are **filtered out of Docker stdout**; the .NET app re-emits them with an origin tag:
+
+| Log prefix | Meaning | Suggested Wazuh level |
+|------------|---------|------------------------|
+| `[OpenVpnTlsExternalProbe]` | Direct probe to OpenVPN port (not our WSS app) | ignore / low |
+| `[OpenVpnTlsAppClient]` | WSS proxy path (`127.0.0.1:localPort`) with `clientRef` / `User-Agent` | alert |
+| `[OpenVpnTlsLocalUnknown]` | Loopback without matched proxy session | investigate |
+
+Wazuh rule **100913** should match `[OpenVpnTlsAppClient]` instead of the raw `TLS Error: tls-crypt` string.
 
 ---
 

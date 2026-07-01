@@ -1,7 +1,9 @@
+using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Moq;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
@@ -12,6 +14,7 @@ public class OvpnFileServiceTests
 {
     private readonly Mock<ILogger<IOvpnFileService>> _loggerMock = new();
     private readonly Mock<IEasyRsaService> _easyRsaMock = new();
+    private readonly IOptions<EasyRsaOptions> _options = Options.Create(new EasyRsaOptions());
 
     [Fact]
     public async Task RevokeOvpnFile_WhenFileExists_MovesFileAndReturnsMetadata()
@@ -24,7 +27,7 @@ public class OvpnFileServiceTests
         _easyRsaMock.Setup(s => s.RevokeCertificateAsync(It.IsAny<string>(), "client1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ServerCertificate { Message = "Revoked", CertificatePath = "/pki/revoked/client1.crt", KeyPath = "/pki/private/client1.key" });
 
-        var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object);
+        var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object, _options);
 
         try
         {
@@ -56,7 +59,7 @@ public class OvpnFileServiceTests
         _easyRsaMock.Setup(s => s.RevokeCertificateAsync(It.IsAny<string>(), "client1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ServerCertificate { Message = "Revoked" });
 
-        var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object);
+        var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object, _options);
 
         try
         {
@@ -81,7 +84,7 @@ public class OvpnFileServiceTests
 
         try
         {
-            var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object);
+            var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object, _options);
             var result = await service.GetOvpnFile("test.ovpn", tempFile, CancellationToken.None);
 
             Assert.Equal("test.ovpn", result.FileName);
@@ -99,7 +102,7 @@ public class OvpnFileServiceTests
     [Fact]
     public async Task GetOvpnFile_WhenFileDoesNotExist_Throws()
     {
-        var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object);
+        var service = new OvpnFileService(_loggerMock.Object, _easyRsaMock.Object, _options);
         var path = Path.Combine(Path.GetTempPath(), "nonexistent_" + Guid.NewGuid().ToString("N") + ".ovpn");
 
         var ex = await Assert.ThrowsAsync<Exception>(() =>

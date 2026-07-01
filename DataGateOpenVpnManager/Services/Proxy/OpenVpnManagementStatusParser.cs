@@ -55,7 +55,7 @@ public static class OpenVpnManagementStatusParser
     {
         foreach (var client in clients)
         {
-            if (!TryParseRealAddressPort(client.RealAddress, out var ip, out var port))
+            if (!OpenVpnRealAddressParser.TryParseHostPort(client.RealAddress, out var ip, out var port))
                 continue;
             if (port != localProxyPort)
                 continue;
@@ -63,6 +63,22 @@ public static class OpenVpnManagementStatusParser
                 continue;
 
             return client;
+        }
+
+        return null;
+    }
+
+    public static OpenVpnManagementClientEntry? FindByVirtualAddress(
+        IEnumerable<OpenVpnManagementClientEntry> clients,
+        string? virtualAddress)
+    {
+        if (string.IsNullOrWhiteSpace(virtualAddress))
+            return null;
+
+        foreach (var client in clients)
+        {
+            if (string.Equals(client.VirtualAddress, virtualAddress, StringComparison.OrdinalIgnoreCase))
+                return client;
         }
 
         return null;
@@ -93,23 +109,4 @@ public static class OpenVpnManagementStatusParser
         return ip.ToString();
     }
 
-    private static bool TryParseRealAddressPort(string realAddress, out string ip, out int port)
-    {
-        ip = string.Empty;
-        port = 0;
-
-        if (string.IsNullOrWhiteSpace(realAddress))
-            return false;
-
-        var lastColon = realAddress.LastIndexOf(':');
-        if (lastColon <= 0 || lastColon >= realAddress.Length - 1)
-            return false;
-
-        ip = realAddress[..lastColon];
-        if (ip.StartsWith('[') && ip.EndsWith(']'))
-            ip = ip[1..^1];
-
-        return int.TryParse(realAddress[(lastColon + 1)..], NumberStyles.Integer, CultureInfo.InvariantCulture, out port)
-               && port is > 0 and <= 65535;
-    }
 }

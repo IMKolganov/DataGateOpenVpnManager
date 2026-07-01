@@ -1,7 +1,9 @@
 # ==========================
-# Stage 1: Build OpenVPN 2.6.17 from source
+# Stage 1: Build OpenVPN from source (override: --build-arg OPENVPN_VERSION=2.7.4)
 # ==========================
 FROM debian:12-slim AS openvpn-build
+
+ARG OPENVPN_VERSION=2.7.4
 
 RUN apt-get update && \
     apt-get install -y \
@@ -20,9 +22,9 @@ RUN apt-get update && \
 
 WORKDIR /tmp
 
-RUN wget -O openvpn.tar.gz https://swupdate.openvpn.net/community/releases/openvpn-2.6.17.tar.gz && \
+RUN wget -O openvpn.tar.gz "https://swupdate.openvpn.net/community/releases/openvpn-${OPENVPN_VERSION}.tar.gz" && \
     tar xzf openvpn.tar.gz && \
-    cd openvpn-2.6.17 && \
+    cd "openvpn-${OPENVPN_VERSION}" && \
     ./configure --disable-debug --disable-dependency-tracking && \
     make -j"$(nproc)" && \
     make install && \
@@ -52,7 +54,7 @@ RUN echo "Using build configuration: $BUILD_CONFIGURATION" && \
 
 
 # ==========================
-# Stage 3: Final runtime image (.NET 10 + OpenVPN 2.6.17)
+# Stage 3: Final runtime image (.NET 10 + OpenVPN)
 # ==========================
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 

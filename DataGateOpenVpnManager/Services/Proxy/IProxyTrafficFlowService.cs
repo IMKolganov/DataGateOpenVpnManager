@@ -24,4 +24,6 @@ public interface IProxyTrafficFlowService
         int bytes,
         DateTime? occurredAtUtc = null);
     IReadOnlyCollection<ProxyTrafficFlowUpdate> BuildBatch(DateTime emittedAtUtc);
+
+    bool TryGetIdentityByLocalProxy(int localProxyPort, string? host, out ProxyTrafficIdentitySnapshot? identity);
 }

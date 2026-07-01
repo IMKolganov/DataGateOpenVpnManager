@@ -48,7 +48,10 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
         }
     }
 
-    public bool ValidateToken(string token, out ClaimsPrincipal? principal)
+    public bool ValidateToken(
+        string token,
+        out ClaimsPrincipal? principal,
+        JwtValidationRequestContext? request = null)
     {
         principal = null;
 
@@ -88,7 +91,21 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
         }
         catch (Exception ex)
         {
-            logger.LogWarning("❌ Token validation error: {Message}", ex.Message);
+            if (request is null)
+            {
+                logger.LogWarning("❌ Token validation error: {Message}", ex.Message);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "❌ Token validation error from {RemoteIp} {Method} {Path} (User-Agent={UserAgent}): {Message}",
+                    request.RemoteIp ?? "unknown",
+                    request.Method,
+                    request.Path,
+                    string.IsNullOrWhiteSpace(request.UserAgent) ? "-" : request.UserAgent,
+                    ex.Message);
+            }
+
             principal = null;
             return false;
         }
