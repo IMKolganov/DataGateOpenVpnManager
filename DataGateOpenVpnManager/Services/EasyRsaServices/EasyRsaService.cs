@@ -1,8 +1,10 @@
-﻿using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
+﻿using DataGateOpenVpnManager.Models;
+using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using DataGateOpenVpnManager.Services.Interfaces;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
+using Microsoft.Extensions.Options;
 
 namespace DataGateOpenVpnManager.Services.EasyRsaServices;
 
@@ -10,7 +12,8 @@ public class EasyRsaService(
     ILogger<IEasyRsaService> logger,
     IEasyRsaParseDbService easyRsaParseDbService,
     IBashCommandRunner easyRsaExecCommandService,
-    IOpenVpnServerService openVpnServerService)
+    IOpenVpnServerService openVpnServerService,
+    IOptions<EasyRsaOptions> options)
     : IEasyRsaService
 {
     private readonly ILogger<IEasyRsaService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -186,7 +189,7 @@ public class EasyRsaService(
         var fullEasyRsaPath = Path.GetFullPath(easyRsaPath);
         var fullEasyRsaPkiPath = Path.Combine(fullEasyRsaPath, "pki");
         
-        var taKeyName = "ta.key";//todo: need move
+        var taKeyName = options.Value.TaKeyFileName;
         if (!Directory.Exists(fullEasyRsaPkiPath) || !File.Exists(Path.Combine(easyRsaPath, "pki", taKeyName)))
         {
             await InstallEasyRsaAsync(fullEasyRsaPath, taKeyName, cancellationToken);

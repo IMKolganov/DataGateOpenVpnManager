@@ -4,6 +4,7 @@ using DataGateOpenVpnManager.Services.OpenVpnTelnet;
 using DataGateOpenVpnManager.Services.PiHole;
 using DataGateOpenVpnManager.Services.Proxy;
 using DataGateOpenVpnManager.Tests.Services.OpenVpnTelnet.Fakes;
+using DataGateOpenVpnManager.Tests.Services.PiHole;
 using DataGateOpenVpnManager.Tests.Services.Proxy;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Diagnostics.Responses;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Proxy;
@@ -33,7 +34,7 @@ public class DiagnosticsControllerTests
             .AddInMemoryCollection(new Dictionary<string, string?> { ["DNS1"] = "10.51.15.1" })
             .Build();
 
-        var runtime = runtimeOptions ?? new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var runtime = runtimeOptions ?? PiHoleRuntimeOptionsStoreTestHelper.Create();
         var piHole = piHoleApiClient ?? new Mock<IPiHoleApiClient>().Object;
         var status = statusStore ?? new PiHoleCollectorStatusStore();
 
@@ -171,13 +172,13 @@ public class DiagnosticsControllerTests
     [Fact]
     public async Task GetPiHoleDiagnostics_ReturnsStatusAndProbeData()
     {
-        var runtime = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions
+        var runtime = PiHoleRuntimeOptionsStoreTestHelper.Create(new PiHoleOptions
         {
             Enabled = true,
             BaseUrl = "http://pi-hole:8080",
             AppPassword = "secret",
             PollIntervalSeconds = 60
-        }));
+        });
         var status = new PiHoleCollectorStatusStore();
         status.SetCollectorRunning(true);
         status.RecordPollFailure(DateTimeOffset.UtcNow, "timeout");

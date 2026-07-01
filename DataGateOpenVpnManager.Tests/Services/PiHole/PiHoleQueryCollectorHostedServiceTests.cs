@@ -54,7 +54,7 @@ public class PiHoleQueryCollectorHostedServiceTests
         var hub = new Mock<IHubContext<OpenVpnEventHub>>();
         hub.Setup(h => h.Clients).Returns(clients.Object);
 
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         store.Apply(new PiHoleOptions { BatchSize = 50, LookbackSeconds = 60, Enabled = true });
 
         var sut = new PiHoleQueryCollectorHostedService(
@@ -160,7 +160,7 @@ public class PiHoleQueryCollectorHostedServiceTests
     [Fact]
     public async Task ExecuteAsync_StartsCollectingAfterRuntimeEnable()
     {
-        var store = new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions()));
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create();
         var api = new Mock<IPiHoleApiClient>();
         api.Setup(x => x.GetQueriesSinceAsync(
                 It.IsAny<DateTimeOffset>(),
@@ -210,7 +210,7 @@ public class PiHoleQueryCollectorHostedServiceTests
         var hub = hubClients ?? CreateDefaultHub();
 
         return new PiHoleQueryCollectorHostedService(
-            store ?? new PiHoleRuntimeOptionsStore(new TestOptionsMonitor(new PiHoleOptions { Enabled = true })),
+            store ?? PiHoleRuntimeOptionsStoreTestHelper.Create(new PiHoleOptions { Enabled = true }),
             api,
             new PiHoleClientIdentityResolver(),
             cursor,

@@ -206,6 +206,20 @@ chmod o+rx "$DATA_DIR" || echo "❌ Failed to chmod $DATA_DIR"
 chmod o+rx "$EASYRSA_DIR" || echo "❌ Failed to chmod $EASYRSA_DIR"
 chmod o+rx "$EASYRSA_DIR/pki" || echo "❌ Failed to chmod $EASYRSA_DIR/pki"
 
+echo "===== Preparing Pi-hole state files in $DATA_DIR... ====="
+# Cursor watermark (same pattern as openvpn.log — pre-create so volume mounts are writable/readable).
+touch "$DATA_DIR/pihole-query-cursor.txt"
+chmod 644 "$DATA_DIR/pihole-query-cursor.txt"
+
+# Runtime config is created by the .NET app on dashboard Save & apply; do not touch an empty JSON file.
+# Re-apply 600 after chmod -R above (recursive pass would widen an existing secrets file to world-readable).
+if [ -f "$DATA_DIR/pihole-runtime-config.json" ]; then
+  chmod 600 "$DATA_DIR/pihole-runtime-config.json"
+  echo "✅ pihole-runtime-config.json permissions set to 600"
+else
+  echo "ℹ️ pihole-runtime-config.json not yet present (created on dashboard Save & apply)"
+fi
+
 echo "✅ crl.pem permission fix complete"
 
 echo "===== FINAL CHECK BEFORE STARTING OPENVPN ====="

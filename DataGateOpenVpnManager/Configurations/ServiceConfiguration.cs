@@ -36,7 +36,7 @@ public static class ServiceConfiguration
                     }));
         });
 
-        services.AddSingleton<IEasyRsaPathResolver, EasyRsaPathResolver>();
+        services.ConfigureEasyRsa(config);
 
         // HttpClient for MicroserviceJwtValidator
         services.AddHttpClient<MicroserviceJwtValidator>(client =>

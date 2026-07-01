@@ -1,11 +1,16 @@
-﻿namespace DataGateOpenVpnManager.Helpers;
+﻿using DataGateOpenVpnManager.Models;
+using Microsoft.Extensions.Options;
 
-public class EasyRsaPathResolver(IConfiguration configuration) : IEasyRsaPathResolver
+namespace DataGateOpenVpnManager.Helpers;
+
+public class EasyRsaPathResolver(IOptions<EasyRsaOptions> options) : IEasyRsaPathResolver
 {
     public string GetEasyRsaPath()
     {
-        return Environment.GetEnvironmentVariable("EASY_RSA_PATH")
-               ?? configuration["EasyRsa:MainPath"]
-               ?? throw new InvalidOperationException("EasyRsa:MainPath is not set");
+        var path = options.Value.MainPath;
+        if (string.IsNullOrWhiteSpace(path))
+            throw new InvalidOperationException("EasyRsa:MainPath is not set");
+
+        return path;
     }
 }

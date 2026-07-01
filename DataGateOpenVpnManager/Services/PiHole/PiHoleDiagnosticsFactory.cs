@@ -9,7 +9,8 @@ public static class PiHoleDiagnosticsFactory
         PiHoleOptions options,
         PiHoleCollectorStatusSnapshot status,
         DateTimeOffset? cursorUntilUtc,
-        (bool Authenticated, int SampleQueryCount, string? Error) probe)
+        (bool Authenticated, int SampleQueryCount, string? Error) probe,
+        DateTimeOffset? persistedConfigAppliedAtUtc = null)
     {
         var checkedAt = DateTime.UtcNow;
         var hasPassword = !string.IsNullOrEmpty(options.AppPassword);
@@ -28,7 +29,7 @@ public static class PiHoleDiagnosticsFactory
             Error = probe.Error,
             SampleQueryCount = probe.SampleQueryCount,
             CollectorRunning = status.CollectorRunning,
-            RuntimeConfigAppliedAtUtc = status.RuntimeConfigAppliedAtUtc?.UtcDateTime,
+            RuntimeConfigAppliedAtUtc = (status.RuntimeConfigAppliedAtUtc ?? persistedConfigAppliedAtUtc)?.UtcDateTime,
             LastPollAtUtc = status.LastPollAtUtc?.UtcDateTime,
             LastSuccessfulPollAtUtc = status.LastSuccessfulPollAtUtc?.UtcDateTime,
             LastPollError = status.LastPollError,

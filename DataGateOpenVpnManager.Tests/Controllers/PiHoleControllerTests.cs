@@ -1,4 +1,5 @@
 using DataGateOpenVpnManager.Controllers;
+using DataGateOpenVpnManager.Tests.Services.PiHole;
 using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.PiHole;
 using DataGateMonitor.SharedModels.Responses;
@@ -23,7 +24,7 @@ public class PiHoleControllerTests
             BatchSize = 100,
             LookbackSeconds = 120
         });
-        var store = new PiHoleRuntimeOptionsStore(monitor);
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create(monitor.CurrentValue);
         var api = new Mock<IPiHoleApiClient>();
         var status = new PiHoleCollectorStatusStore();
         var cursor = new Mock<IPiHoleQueryCursorStore>();
@@ -69,7 +70,7 @@ public class PiHoleControllerTests
             BaseUrl = "http://pi-hole:8080",
             AppPassword = "stored-secret"
         });
-        var store = new PiHoleRuntimeOptionsStore(monitor);
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create(monitor.CurrentValue);
         var controller = CreateController(store);
 
         var result = controller.GetConfig();
@@ -90,7 +91,7 @@ public class PiHoleControllerTests
             AppPassword = "secret",
             PollIntervalSeconds = 60
         });
-        var store = new PiHoleRuntimeOptionsStore(monitor);
+        var store = PiHoleRuntimeOptionsStoreTestHelper.Create(monitor.CurrentValue);
         var status = new PiHoleCollectorStatusStore();
         status.SetCollectorRunning(true);
         status.RecordPollSuccess(new PiHolePollSuccessResult

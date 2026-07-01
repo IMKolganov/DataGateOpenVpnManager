@@ -1,13 +1,17 @@
+using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.EasyRsaServices;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace DataGateOpenVpnManager.Tests.Services.EasyRsaServices;
 
 public class EasyRsaServiceTests
 {
+    private static readonly IOptions<EasyRsaOptions> DefaultOptions = Options.Create(new EasyRsaOptions());
+
     [Fact]
     public async Task RevokeCertificateAsync_WhenIssuedCertMissing_ThrowsFileNotFound()
     {
@@ -18,7 +22,8 @@ public class EasyRsaServiceTests
             NullLogger<IEasyRsaService>.Instance,
             Mock.Of<IEasyRsaParseDbService>(),
             Mock.Of<IBashCommandRunner>(),
-            Mock.Of<IOpenVpnServerService>());
+            Mock.Of<IOpenVpnServerService>(),
+            DefaultOptions);
 
         try
         {
