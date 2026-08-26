@@ -1,5 +1,7 @@
 using DataGateOpenVpnManager.Helpers;
+using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
+using Moq;
 
 namespace DataGateOpenVpnManager.Tests.Helpers;
 
@@ -111,6 +113,47 @@ public class VpnServerAnnounceApiUrlResolverTests
         finally
         {
             Environment.SetEnvironmentVariable(VpnServerAnnounceApiUrlResolver.PublicApiUrlKey, previous);
+        }
+    }
+
+    [Fact]
+    public void GetConfiguredPublicIp_PrefersPublicIpEnv()
+    {
+        var previousPublicIp = Environment.GetEnvironmentVariable("PUBLIC_IP");
+        try
+        {
+            Environment.SetEnvironmentVariable("PUBLIC_IP", "81.27.109.193");
+            var config = new ConfigurationBuilder().Build();
+
+            Assert.Equal("81.27.109.193", VpnServerAnnounceApiUrlResolver.GetConfiguredPublicIp(config));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PUBLIC_IP", previousPublicIp);
+        }
+    }
+
+    [Fact]
+    public async Task ResolvePublicIpForAnnounceAsync_UsesConfiguredIpWithoutExternalLookup()
+    {
+        var previousPublicIp = Environment.GetEnvironmentVariable("PUBLIC_IP");
+        try
+        {
+            Environment.SetEnvironmentVariable("PUBLIC_IP", "81.27.109.193");
+            var config = new ConfigurationBuilder().Build();
+            var external = new Mock<IExternalIpAddressService>();
+
+            var ip = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
+                config, external.Object, CancellationToken.None);
+
+            Assert.Equal("81.27.109.193", ip);
+            external.Verify(
+                x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PUBLIC_IP", previousPublicIp);
         }
     }
 }
