@@ -60,7 +60,8 @@ public sealed class VpnServerAnnounceHostedService(
         string? publicIp = null;
         try
         {
-            publicIp = await externalIpAddressService.GetPublicIpAddressAsync(cancellationToken);
+            publicIp = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
+                configuration, externalIpAddressService, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
