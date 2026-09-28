@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
@@ -16,6 +17,48 @@ namespace DataGateOpenVpnManager.Tests.Controllers;
 
 public class OpenVpnProxyControllerIntegrationTests
 {
+    [Theory]
+    [InlineData(1400)]
+    [InlineData(48 * 1024)]
+    public async Task UdpProxy_RoundTripsFramedPayload_AndRecordsTraffic(int payloadBytes)
+    {
+        await using var echo = await UdpEchoServer.StartAsync();
+        var (server, active, flow) = CreateProxyTestServer(echo.Port, proto: "udp");
+
+        using var ws = await server.CreateWebSocketClient()
+            .ConnectAsync(new Uri("ws://localhost/api/proxy?mode=udp"), CancellationToken.None);
+
+        var payload = CreatePayload(payloadBytes);
+        await ws.SendAsync(FrameUdpPayload(payload), WebSocketMessageType.Binary, true, CancellationToken.None);
+        var echoed = await ReceiveFramedUdpPayloadAsync(ws, payload.Length, CancellationToken.None);
+
+        Assert.Equal(payload.Length, echoed.Length);
+        Assert.Equal(payload, echoed);
+
+        var observed = await WaitForTrafficAsync(flow, payload.Length, TimeSpan.FromSeconds(3));
+        Assert.NotNull(observed);
+        Assert.True(observed!.ClientToServerBytesTotal >= payload.Length);
+        Assert.True(observed.ServerToClientBytesTotal >= payload.Length);
+
+        await TryCloseAsync(ws);
+        await WaitUntilAsync(() => active.Count == 0, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task UdpProxy_WhenClientClosesIdleSession_UnregistersQuickly()
+    {
+        await using var echo = await UdpEchoServer.StartAsync();
+        var (server, active, _) = CreateProxyTestServer(echo.Port, proto: "udp");
+
+        using var ws = await server.CreateWebSocketClient()
+            .ConnectAsync(new Uri("ws://localhost/api/proxy?mode=udp"), CancellationToken.None);
+
+        await WaitUntilAsync(() => active.Count == 1, TimeSpan.FromSeconds(3));
+
+        await TryCloseAsync(ws);
+        await WaitUntilAsync(() => active.Count == 0, TimeSpan.FromSeconds(5));
+    }
+
     [Theory]
     [InlineData(10 * 1024 * 1024)]
     public async Task TcpProxy_RoundTripsPayload_AndRecordsTraffic(int payloadBytes)
@@ -114,6 +157,35 @@ public class OpenVpnProxyControllerIntegrationTests
         return (new TestServer(hostBuilder), active, flow);
     }
 
+    private static byte[] FrameUdpPayload(byte[] payload)
+    {
+        var framed = new byte[2 + payload.Length];
+        UdpWsFraming.WriteFrame(framed, payload);
+        return framed;
+    }
+
+    private static async Task<byte[]> ReceiveFramedUdpPayloadAsync(WebSocket ws, int expectedPayloadBytes, CancellationToken ct)
+    {
+        var buffer = new byte[UdpWsFraming.BatchCapacityBytes];
+        using var ms = new MemoryStream();
+        while (ms.Length < 2 + expectedPayloadBytes)
+        {
+            var res = await ws.ReceiveAsync(buffer, ct);
+            if (res.MessageType == WebSocketMessageType.Close)
+                throw new InvalidOperationException("WebSocket closed before framed UDP payload was received.");
+            if (res.MessageType != WebSocketMessageType.Binary)
+                continue;
+
+            if (res.Count > 0)
+                ms.Write(buffer, 0, res.Count);
+        }
+
+        var data = ms.ToArray();
+        var next = UdpWsFraming.TryParseNextFrame(data, 0, out var frame);
+        Assert.True(next > 0, "Expected at least one valid UDP frame in WS message.");
+        return frame.ToArray();
+    }
+
     private static byte[] CreatePayload(int size)
     {
         var bytes = new byte[size];
@@ -191,6 +263,54 @@ public class OpenVpnProxyControllerIntegrationTests
     {
         public void ReportDisconnect(ProxyTrafficFlowUpdate update)
         {
+        }
+    }
+
+    private sealed class UdpEchoServer : IAsyncDisposable
+    {
+        private readonly UdpClient _client;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _receiveLoopTask;
+
+        public int Port { get; }
+
+        private UdpEchoServer(UdpClient client)
+        {
+            _client = client;
+            Port = ((IPEndPoint)client.Client.LocalEndPoint!).Port;
+            _receiveLoopTask = ReceiveLoopAsync();
+        }
+
+        public static Task<UdpEchoServer> StartAsync()
+        {
+            var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+            return Task.FromResult(new UdpEchoServer(client));
+        }
+
+        private async Task ReceiveLoopAsync()
+        {
+            try
+            {
+                while (!_cts.IsCancellationRequested)
+                {
+                    var result = await _client.ReceiveAsync(_cts.Token);
+                    await _client.SendAsync(result.Buffer, result.RemoteEndPoint, _cts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _cts.Cancel();
+            _client.Dispose();
+            try { await _receiveLoopTask; } catch { /* ignored */ }
+            _cts.Dispose();
         }
     }
 

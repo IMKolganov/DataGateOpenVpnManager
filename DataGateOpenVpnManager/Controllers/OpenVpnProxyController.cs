@@ -28,8 +28,10 @@ public class OpenVpnProxyController(
     ProxyBatchBufferPool batchBufferPool) : ControllerBase
 {
     private const int WsSegmentSize = 64 * 1024;
-    private const int UdpSocketBufferBytes = 4 * 1024 * 1024;
-    private const int UdpSendQueueDepth = 4;
+    internal const int UdpSocketBufferBytes = 4 * 1024 * 1024;
+    internal const int UdpSendQueueDepth = 4;
+    private static readonly TimeSpan PumpDrainTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan WebSocketCloseTimeout = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// Resolves the real WebSocket client address by the local ephemeral port of the socket
@@ -134,7 +136,7 @@ public class OpenVpnProxyController(
         try
         {
             if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                await SafeCloseWs(ws, WebSocketCloseStatus.NormalClosure, "Closing");
         }
         catch (Exception e)
         {
@@ -199,10 +201,9 @@ public class OpenVpnProxyController(
             await Task.WhenAny(wsToTcp, tcpToWs);
             await pumpCts.CancelAsync();
 
-            using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(2));
             try
             {
-                await Task.WhenAll(wsToTcp, tcpToWs).WaitAsync(drain.Token);
+                await DrainPumpTasksAsync(wsToTcp, tcpToWs, logger, "TCP");
             }
             catch (Exception ex)
             {
@@ -271,10 +272,9 @@ public class OpenVpnProxyController(
                 await Task.WhenAny(wsToUdp, udpToWs);
                 await pumpCts.CancelAsync();
 
-                using var drain = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 try
                 {
-                    await Task.WhenAll(wsToUdp, udpToWs).WaitAsync(drain.Token);
+                    await DrainPumpTasksAsync(wsToUdp, udpToWs, logger, "UDP");
                 }
                 catch (Exception ex)
                 {
@@ -291,7 +291,7 @@ public class OpenVpnProxyController(
             await SafeCloseWs(ws, WebSocketCloseStatus.NormalClosure, "Closing");
     }
 
-    private static Socket CreateVpnUdpSocket(IPEndPoint remote, ILogger logger)
+    internal static Socket CreateVpnUdpSocket(IPEndPoint remote, ILogger logger)
     {
         var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         try
@@ -413,14 +413,19 @@ public class OpenVpnProxyController(
                 AllowSynchronousContinuations = false
             });
 
-        var producer = ProduceUdpBatchesAsync(socket, channel.Writer, pool, ct, logger);
-        var sender = SendUdpBatchesAsync(ws, channel.Reader, pool, counter, ct, logger);
+        // Local CTS: when one leg exits, cancel the other (e.g. producer blocked on ReceiveAsync).
+        using var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var pumpCt = pumpCts.Token;
+
+        var producer = ProduceUdpBatchesAsync(socket, channel.Writer, pool, pumpCt, logger);
+        var sender = SendUdpBatchesAsync(ws, channel.Reader, pool, counter, pumpCt, logger);
 
         await Task.WhenAny(producer, sender);
+        await pumpCts.CancelAsync();
         channel.Writer.TryComplete();
         try
         {
-            await Task.WhenAll(producer, sender);
+            await DrainPumpTasksAsync(producer, sender, logger, "UDP->WS");
         }
         catch (OperationCanceledException)
         {
@@ -428,6 +433,19 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogDebug(e, "UDP->WS pump error. {Message}", e.Message);
+        }
+    }
+
+    private static async Task DrainPumpTasksAsync(Task first, Task second, ILogger logger, string label)
+    {
+        using var drain = new CancellationTokenSource(PumpDrainTimeout);
+        try
+        {
+            await Task.WhenAll(first, second).WaitAsync(drain.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogDebug("{Label} pump drain timed out after {Seconds}s", label, PumpDrainTimeout.TotalSeconds);
         }
     }
 
@@ -735,7 +753,8 @@ public class OpenVpnProxyController(
     {
         try
         {
-            await ws.CloseAsync(status, reason, CancellationToken.None);
+            using var closeCts = new CancellationTokenSource(WebSocketCloseTimeout);
+            await ws.CloseAsync(status, reason, closeCts.Token);
         }
         catch
         {
@@ -798,7 +817,7 @@ public class OpenVpnProxyController(
         try
         {
             if (ws.State == WebSocketState.Open)
-                await ws.CloseAsync(WebSocketCloseStatus.InternalServerError, reason, CancellationToken.None);
+                await SafeCloseWs(ws, WebSocketCloseStatus.InternalServerError, reason);
         }
         catch (Exception ex)
         {
