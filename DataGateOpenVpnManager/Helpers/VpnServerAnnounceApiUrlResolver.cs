@@ -32,7 +32,7 @@ public static class VpnServerAnnounceApiUrlResolver
     {
         var value = Environment.GetEnvironmentVariable(PublicApiUrlKey)
             ?? configuration[PublicApiUrlKey];
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : EnsureTrailingSlash(value.Trim());
     }
 
     /// <summary>
