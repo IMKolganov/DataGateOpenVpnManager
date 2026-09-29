@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -22,6 +23,11 @@ public sealed class ExternalIpAddressService(
 
     public async Task<string?> GetPublicIpAddressAsync(CancellationToken cancellationToken)
     {
+        // Install sets PUBLIC_IP — prefer it over ifconfig/ipify (often blocked on VPS).
+        var configured = VpnServerAnnounceApiUrlResolver.GetConfiguredPublicIp(configuration);
+        if (configured is not null)
+            return configured;
+
         if (TryGetCached(out var cached, out var hit))
             return hit ? cached : null;
 

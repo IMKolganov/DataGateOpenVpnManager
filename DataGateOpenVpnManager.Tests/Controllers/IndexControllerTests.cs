@@ -100,6 +100,32 @@ public class IndexControllerTests
     }
 
     [Fact]
+    public async Task Get_WhenPublicIpConfigured_ReturnsItWithoutExternalLookup()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PUBLIC_IP"] = "81.27.109.193",
+                ["PORT"] = "1194",
+                ["PROTO"] = "udp"
+            })
+            .Build();
+        _externalIpMock
+            .Setup(x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("should not be called"));
+
+        var controller = new IndexController(config, _envMock.Object, _loggerMock.Object, _externalIpMock.Object);
+        var result = await controller.Get(CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<ApiResponse<RootOpenVpnInfoResponse>>(okResult.Value);
+        Assert.Equal("81.27.109.193", response.Data!.PublicIp);
+        _externalIpMock.Verify(
+            x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task Get_WhenCipherEnvEmpty_AndDcoTrue_DefaultsCipherLikeEntrypoint()
     {
         var configData = new Dictionary<string, string?>
