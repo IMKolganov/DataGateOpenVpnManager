@@ -32,6 +32,34 @@ public class ExternalIpAddressServiceTests
     }
 
     [Fact]
+    public async Task GetPublicIpAddressAsync_PrefersConfiguredPublicIp_WithoutHttp()
+    {
+        var calls = 0;
+        var handler = new FakeHandler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("203.0.113.1")
+            });
+        });
+        var dict = new Dictionary<string, string?>
+        {
+            ["PUBLIC_IP"] = "81.27.109.193",
+            ["ExternalIpServices:0"] = "https://example.test/ip"
+        };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+        var sut = new ExternalIpAddressService(
+            _logger.Object,
+            config,
+            new HttpClient(handler),
+            new MemoryCache(new MemoryCacheOptions()));
+
+        Assert.Equal("81.27.109.193", await sut.GetPublicIpAddressAsync(CancellationToken.None));
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
     public async Task GetPublicIpAddressAsync_ReturnsTrimmedIp_AndCaches()
     {
         const string url = "https://example.test/ip";

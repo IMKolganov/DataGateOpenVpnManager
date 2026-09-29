@@ -25,7 +25,9 @@ public class IndexController(
             string? publicIp = null;
             try
             {
-                publicIp = await externalIpAddressService.GetPublicIpAddressAsync(cancellationToken);
+                // Same chain as self-announce: PUBLIC_IP → DNS of PUBLIC_API_URL → external lookup.
+                publicIp = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
+                    config, externalIpAddressService, cancellationToken);
             }
             catch (Exception ex)
             {

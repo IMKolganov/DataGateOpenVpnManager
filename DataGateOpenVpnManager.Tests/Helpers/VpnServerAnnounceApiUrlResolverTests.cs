@@ -53,107 +53,122 @@ public class VpnServerAnnounceApiUrlResolverTests
     }
 
     [Fact]
-    public void ResolveApiPort_EnvWinsOverConfiguration()
+    public void ResolveApiPort_UsesConfiguration()
     {
-        var previous = Environment.GetEnvironmentVariable("API_PORT");
-        try
-        {
-            Environment.SetEnvironmentVariable("API_PORT", "5099");
-            var config = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["API_PORT"] = "5012" })
-                .Build();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["API_PORT"] = "5012" })
+            .Build();
 
-            Assert.Equal(5099, VpnServerAnnounceApiUrlResolver.ResolveApiPort(config));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("API_PORT", previous);
-        }
+        Assert.Equal(5012, VpnServerAnnounceApiUrlResolver.ResolveApiPort(config));
     }
 
     [Fact]
-    public void ResolveApiPort_UsesConfigurationWhenEnvUnset()
+    public void ResolveApiPort_DefaultsWhenUnset()
     {
-        var previous = Environment.GetEnvironmentVariable("API_PORT");
-        try
-        {
-            Environment.SetEnvironmentVariable("API_PORT", null);
-            var config = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["API_PORT"] = "5012" })
-                .Build();
-
-            Assert.Equal(5012, VpnServerAnnounceApiUrlResolver.ResolveApiPort(config));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("API_PORT", previous);
-        }
+        var config = new ConfigurationBuilder().Build();
+        Assert.Equal(VpnServerAnnounceApiUrlResolver.DefaultApiPort, VpnServerAnnounceApiUrlResolver.ResolveApiPort(config));
     }
 
     [Fact]
-    public void GetConfiguredPublicApiUrl_EnvWinsOverConfiguration()
+    public void GetConfiguredPublicApiUrl_UsesConfiguration()
     {
-        var previous = Environment.GetEnvironmentVariable(VpnServerAnnounceApiUrlResolver.PublicApiUrlKey);
-        try
-        {
-            Environment.SetEnvironmentVariable(
-                VpnServerAnnounceApiUrlResolver.PublicApiUrlKey,
-                "https://from-env.example/");
-            var config = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["PUBLIC_API_URL"] = "https://from-config.example/"
-                })
-                .Build();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PUBLIC_API_URL"] = "https://from-config.example/"
+            })
+            .Build();
 
-            Assert.Equal(
-                "https://from-env.example/",
-                VpnServerAnnounceApiUrlResolver.GetConfiguredPublicApiUrl(config));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(VpnServerAnnounceApiUrlResolver.PublicApiUrlKey, previous);
-        }
+        Assert.Equal(
+            "https://from-config.example/",
+            VpnServerAnnounceApiUrlResolver.GetConfiguredPublicApiUrl(config));
     }
 
     [Fact]
-    public void GetConfiguredPublicIp_PrefersPublicIpEnv()
+    public void GetConfiguredPublicIp_UsesConfiguration()
     {
-        var previousPublicIp = Environment.GetEnvironmentVariable("PUBLIC_IP");
-        try
-        {
-            Environment.SetEnvironmentVariable("PUBLIC_IP", "81.27.109.193");
-            var config = new ConfigurationBuilder().Build();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["PUBLIC_IP"] = "81.27.109.193" })
+            .Build();
 
-            Assert.Equal("81.27.109.193", VpnServerAnnounceApiUrlResolver.GetConfiguredPublicIp(config));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PUBLIC_IP", previousPublicIp);
-        }
+        Assert.Equal("81.27.109.193", VpnServerAnnounceApiUrlResolver.GetConfiguredPublicIp(config));
     }
 
     [Fact]
     public async Task ResolvePublicIpForAnnounceAsync_UsesConfiguredIpWithoutExternalLookup()
     {
-        var previousPublicIp = Environment.GetEnvironmentVariable("PUBLIC_IP");
-        try
-        {
-            Environment.SetEnvironmentVariable("PUBLIC_IP", "81.27.109.193");
-            var config = new ConfigurationBuilder().Build();
-            var external = new Mock<IExternalIpAddressService>();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["PUBLIC_IP"] = "81.27.109.193" })
+            .Build();
+        var external = new Mock<IExternalIpAddressService>();
 
-            var ip = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
-                config, external.Object, CancellationToken.None);
+        var ip = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
+            config, external.Object, CancellationToken.None);
 
-            Assert.Equal("81.27.109.193", ip);
-            external.Verify(
-                x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()),
-                Times.Never);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PUBLIC_IP", previousPublicIp);
-        }
+        Assert.Equal("81.27.109.193", ip);
+        external.Verify(
+            x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ResolvePublicIpForAnnounceAsync_UsesIpLiteralFromPublicApiUrl_WithoutDnsOrExternal()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["PUBLIC_API_URL"] = "https://203.0.113.50/"
+            })
+            .Build();
+        var external = new Mock<IExternalIpAddressService>();
+
+        var ip = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
+            config, external.Object, CancellationToken.None);
+
+        Assert.Equal("203.0.113.50", ip);
+        external.Verify(
+            x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ResolvePublicIpForAnnounceAsync_FallsBackToExternal_WhenNoPublicIpOrApiUrl()
+    {
+        var config = new ConfigurationBuilder().Build();
+        var external = new Mock<IExternalIpAddressService>();
+        external
+            .Setup(x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync("198.51.100.7");
+
+        var ip = await VpnServerAnnounceApiUrlResolver.ResolvePublicIpForAnnounceAsync(
+            config, external.Object, CancellationToken.None);
+
+        Assert.Equal("198.51.100.7", ip);
+        external.Verify(
+            x => x.GetPublicIpAddressAsync(It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("not-an-ip")]
+    [InlineData("127.0.0.1")]
+    [InlineData("0.0.0.0")]
+    [InlineData("::1")]
+    [InlineData("2001:db8::1")]
+    public void TryParseConfiguredPublicIp_RejectsInvalid(string? raw)
+    {
+        Assert.False(VpnServerAnnounceApiUrlResolver.TryParseConfiguredPublicIp(raw, out _));
+    }
+
+    [Theory]
+    [InlineData("81.27.109.193", "81.27.109.193")]
+    [InlineData("  203.0.113.10 \n", "203.0.113.10")]
+    public void TryParseConfiguredPublicIp_AcceptsPublicIpv4(string raw, string expected)
+    {
+        Assert.True(VpnServerAnnounceApiUrlResolver.TryParseConfiguredPublicIp(raw, out var ip));
+        Assert.Equal(expected, ip);
     }
 }
