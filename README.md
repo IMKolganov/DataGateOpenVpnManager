@@ -243,8 +243,9 @@ docker exec openvpn-udp datagate-profile node-id     # key fingerprint to compar
 
 * `--service` adds `pull-filter ignore "redirect-gateway" | "dhcp-option" | "block-outside-dns"`: only VPN-internal
   traffic uses the tunnel. `--static-ip` writes `ifconfig-push <ip> <netmask>` to ccd (must be inside `VPN_SUBNET`,
-  not network/broadcast/server address, not used by another CN in ccd or `ipp.txt`). Prefer addresses at the top
-  of the subnet — the dynamic pool hands out from the bottom.
+  not network/broadcast/server address, not used by another CN in ccd, `ipp.txt` or by a client connected right
+  now per the management interface). Prefer addresses at the top of the subnet — the dynamic pool hands out from
+  the bottom and does not know about ccd addresses, so a later dynamic client can still be given the same one.
 * `revoke`/`get` go by serial number, not CN (easy-rsa allows the same CN several times in `index.txt`): a profile
   already revoked from the dashboard is only recorded, and if the CN was re-issued since, the newer certificate
   is never touched.

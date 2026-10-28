@@ -12,7 +12,7 @@ public interface IClientConfigDirStore
     Task<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken);
 
     /// <summary>Throws <see cref="LocalIssuanceValidationException"/> when the address cannot be used by <paramref name="commonName"/>.</summary>
-    void ValidateStaticIp(string commonName, string staticIp);
+    Task ValidateStaticIpAsync(string commonName, string staticIp, CancellationToken cancellationToken);
 
     Task WriteAsync(string commonName, string? staticIp, CancellationToken cancellationToken);
 

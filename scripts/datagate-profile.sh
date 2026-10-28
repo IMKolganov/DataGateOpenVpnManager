@@ -92,13 +92,16 @@ case "$cmd" in
     [ -n "$days" ] && body+=",\"ExpireDays\":$days"
     body+="}"
     request POST /profiles "$body" >&2; echo >&2
-    emit "$(request GET "/profiles/$cn/ovpn")" "$file"
+    # request exits inside $(...) only end the subshell: keep its status, never write an empty profile.
+    content="$(request GET "/profiles/$cn/ovpn")" || exit 1
+    emit "$content" "$file"
     ;;
   get)
     [ $# -ge 1 ] || usage
     cn="$1"; shift; file=""
     if [ "${1:-}" = "-o" ] || [ "${1:-}" = "--output" ]; then file="${2:?}"; fi
-    emit "$(request GET "/profiles/$cn/ovpn")" "$file"
+    content="$(request GET "/profiles/$cn/ovpn")" || exit 1
+    emit "$content" "$file"
     ;;
   revoke)
     [ $# -eq 1 ] || usage

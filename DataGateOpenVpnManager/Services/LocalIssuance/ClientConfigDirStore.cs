@@ -1,10 +1,13 @@
 using System.Net;
 using DataGateOpenVpnManager.Helpers;
+using DataGateOpenVpnManager.Services.Proxy;
 
 namespace DataGateOpenVpnManager.Services.LocalIssuance;
 
-public sealed class ClientConfigDirStore(LocalIssuanceOptions options, ILogger<ClientConfigDirStore> logger)
-    : IClientConfigDirStore
+public sealed class ClientConfigDirStore(
+    LocalIssuanceOptions options,
+    ILogger<ClientConfigDirStore> logger,
+    IOpenVpnManagementStatusCache? managementStatus = null) : IClientConfigDirStore
 {
     internal const string ManagedHeader = "# Managed by DataGateOpenVpnManager (local issuance). Do not edit by hand.";
 
@@ -19,7 +22,7 @@ public sealed class ClientConfigDirStore(LocalIssuanceOptions options, ILogger<C
         return new Releaser(_gate);
     }
 
-    public void ValidateStaticIp(string commonName, string staticIp)
+    public async Task ValidateStaticIpAsync(string commonName, string staticIp, CancellationToken cancellationToken)
     {
         if (!IsEnabled)
             throw new LocalIssuanceValidationException(
@@ -51,6 +54,13 @@ public sealed class ClientConfigDirStore(LocalIssuanceOptions options, ILogger<C
             if (ip == normalized && !string.Equals(cn, commonName, StringComparison.Ordinal))
                 throw new LocalIssuanceValidationException(
                     $"{normalized} is held by '{cn}' in the dynamic pool ({options.IppFile}).", isConflict: true);
+        }
+
+        foreach (var (cn, ip) in await ReadConnectedAddressesAsync(cancellationToken))
+        {
+            if (ip == normalized && !string.Equals(cn, commonName, StringComparison.Ordinal))
+                throw new LocalIssuanceValidationException(
+                    $"{normalized} is in use right now by connected client '{cn}'.", isConflict: true);
         }
     }
 
@@ -133,6 +143,29 @@ public sealed class ClientConfigDirStore(LocalIssuanceOptions options, ILogger<C
             if (parts.Length >= 2 && IPAddress.TryParse(parts[1].Trim(), out var ip))
                 yield return (parts[0].Trim(), ip.ToString());
         }
+    }
+
+    /// <summary>
+    /// Live virtual addresses from the management interface: OpenVPN rewrites ipp.txt only every few minutes,
+    /// so a dynamic client connected since then is invisible there. Skipped when management cannot answer now.
+    /// </summary>
+    private async Task<IEnumerable<(string Cn, string Ip)>> ReadConnectedAddressesAsync(CancellationToken cancellationToken)
+    {
+        if (managementStatus is null)
+            return [];
+
+        var requestedAt = DateTime.UtcNow;
+        await managementStatus.RefreshAsync(cancellationToken);
+        var snapshot = managementStatus.GetSnapshot();
+        if (snapshot is not { IsValid: true } || snapshot.FetchedAtUtc < requestedAt)
+        {
+            logger.LogWarning("OpenVPN management status unavailable; static IP checked against ccd and ipp.txt only.");
+            return [];
+        }
+
+        return snapshot.Clients
+            .Where(c => IPAddress.TryParse(c.VirtualAddress, out _))
+            .Select(c => (c.CommonName, IPAddress.Parse(c.VirtualAddress).ToString()));
     }
 
     // Dashboard-issued CNs are not held to CommonNameValidator; only refuse names that escape the ccd dir.

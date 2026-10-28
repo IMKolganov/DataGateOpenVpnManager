@@ -46,7 +46,7 @@ public class OvpnFileService(
         // Hold the ccd gate from IP validation until the file is written (no double assignment).
         await using var ccdLease = writesCcd ? await clientConfigDirStore.AcquireAsync(cancellationToken) : null;
         if (staticIp is not null)
-            clientConfigDirStore.ValidateStaticIp(commonName, staticIp);
+            await clientConfigDirStore.ValidateStaticIpAsync(commonName, staticIp, cancellationToken);
 
         await using var issuance = issuanceTracker.Begin(commonName);
         try

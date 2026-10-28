@@ -5,6 +5,8 @@ using DataGateOpenVpnManager.Services.EasyRsaServices;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
 using DataGateOpenVpnManager.Services.LocalIssuance;
+using DataGateOpenVpnManager.Services.OpenVpnTelnet;
+using DataGateOpenVpnManager.Services.Proxy;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DataGateOpenVpnManager.Configurations;
@@ -102,7 +104,12 @@ public static class ServiceConfiguration
     {
         var options = LocalIssuanceOptions.FromConfiguration(config);
         services.AddSingleton(options);
-        services.AddSingleton<IClientConfigDirStore, ClientConfigDirStore>();
+        // Live client addresses come from the management interface, wired by ConfigureSignalR (absent when
+        // ConfigureServices is composed alone, e.g. in tests): then static IPs are checked against files only.
+        services.AddSingleton<IClientConfigDirStore>(sp => new ClientConfigDirStore(
+            sp.GetRequiredService<LocalIssuanceOptions>(),
+            sp.GetRequiredService<ILogger<ClientConfigDirStore>>(),
+            sp.GetService<OpenVpnManagementSignalService>() is null ? null : sp.GetService<IOpenVpnManagementStatusCache>()));
         services.TryAddSingleton(TimeProvider.System);
 
         if (!options.Enabled)
