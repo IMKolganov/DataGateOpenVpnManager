@@ -100,6 +100,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && \
     find /scripts -name '*.sh' -exec sed -i 's/\r$//' {} + && \
     chmod +x /entrypoint.sh && chmod +x /scripts/*.sh && \
-    chmod +x /usr/local/bin/wss-udp-proxy
+    chmod +x /usr/local/bin/wss-udp-proxy && \
+    ln -sf /scripts/datagate-profile.sh /usr/local/bin/datagate-profile
 
 ENTRYPOINT ["/entrypoint.sh"]

@@ -1,4 +1,5 @@
 using DataGateOpenVpnManager.Configurations;
+using DataGateOpenVpnManager.Services.LocalIssuance;
 
 var builder = WebApplication.CreateBuilder(args);
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -15,6 +16,10 @@ builder.Host.UseDefaultServiceProvider(options =>
     options.ValidateScopes = true;
     options.ValidateOnBuild = true;
 });
+
+var localIssuance = app.Services.GetRequiredService<LocalIssuanceOptions>();
+if (localIssuance.Enabled)
+    app.Lifetime.ApplicationStarted.Register(() => LocalAdminChannel.RestrictSocket(localIssuance));
 
 app.ConfigureMiddleware();
 app.ConfigurePipeline();

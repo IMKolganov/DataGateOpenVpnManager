@@ -2,6 +2,7 @@
 using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateOpenVpnManager.Services.LocalIssuance;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 using Microsoft.Extensions.Options;
 
@@ -12,7 +13,8 @@ public class OvpnFileService(
     IEasyRsaService easyRsaService,
     IOptions<EasyRsaOptions> options,
     IOvpnIssuanceTracker issuanceTracker,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    IClientConfigDirStore clientConfigDirStore)
     : IOvpnFileService
 {
     public async Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string friendlyΝame,
@@ -20,14 +22,39 @@ public class OvpnFileService(
         string serverIp, int serverPort, CancellationToken cancellationToken, 
         string issuedTo = "openVpnClient", int certExpireDays = 365)
     {
-        easyRsaPath = Path.GetFullPath(easyRsaPath);
+        var result = await IssueOvpnFile(new OvpnIssueRequest
+        {
+            EasyRsaPath = easyRsaPath,
+            CommonName = commonName,
+            FriendlyName = friendlyΝame,
+            ConfigTemplate = configTemplate,
+            ServerIp = serverIp,
+            ServerPort = serverPort,
+            IssuedTo = issuedTo,
+            CertExpireDays = certExpireDays,
+        }, cancellationToken);
+        return result.Metadata;
+    }
+
+    public async Task<OvpnIssueResult> IssueOvpnFile(OvpnIssueRequest request, CancellationToken cancellationToken)
+    {
+        var easyRsaPath = Path.GetFullPath(request.EasyRsaPath);
+        var commonName = request.CommonName;
+        var staticIp = string.IsNullOrWhiteSpace(request.StaticIp) ? null : request.StaticIp.Trim();
+        var writesCcd = staticIp is not null || clientConfigDirStore.IsExclusive;
+
+        // Hold the ccd gate from IP validation until the file is written (no double assignment).
+        await using var ccdLease = writesCcd ? await clientConfigDirStore.AcquireAsync(cancellationToken) : null;
+        if (staticIp is not null)
+            clientConfigDirStore.ValidateStaticIp(commonName, staticIp);
+
         await using var issuance = issuanceTracker.Begin(commonName);
         try
         {
             var ovpnFileDir = Path.Combine(easyRsaPath, "pki", "ovpn_files");
             logger.LogInformation("Step 1: Building client certificate...");
             var certResult = await easyRsaService.BuildCertificateAsync(easyRsaPath, 
-                cancellationToken, commonName, certExpireDays);
+                cancellationToken, commonName, request.CertExpireDays);
 
             var caCertPath = Path.Combine(easyRsaPath, "pki", "ca.crt");
             var caCertContent = await ReadPemContentAsync(
@@ -45,8 +72,10 @@ public class OvpnFileService(
                     cancellationToken);
             
             logger.LogInformation("Step 3: Generating .ovpn file...");//todo:null or empty configTemplate
-            var ovpnContent = GenerateOvpnFile(configTemplate, friendlyΝame,serverIp, serverPort, caCertContent, 
-                clientCertContent, clientKeyContent, taKeyContent);
+            var ovpnContent = GenerateOvpnFile(request.ConfigTemplate, request.FriendlyName, request.ServerIp,
+                request.ServerPort, caCertContent, clientCertContent, clientKeyContent, taKeyContent);
+            if (request.IsServiceProfile)
+                ovpnContent = OvpnServiceProfileTemplate.Apply(ovpnContent);
 
             logger.LogInformation("Step 4: Writing .ovpn file...");
 
@@ -73,13 +102,16 @@ public class OvpnFileService(
                 FileName = fileInfo.Name,
                 FilePath = fileInfo.FullName,
                 IssuedAt = DateTime.UtcNow,
-                IssuedTo = issuedTo,
+                IssuedTo = request.IssuedTo,
                 CertFilePath = certResult.CertificatePath,
                 KeyFilePath = certResult.KeyPath,
             };
 
+            if (writesCcd)
+                await clientConfigDirStore.WriteAsync(commonName, staticIp, cancellationToken);
+
             issuance.MarkCompleted();
-            return issuedOvpnFile;
+            return new OvpnIssueResult(issuedOvpnFile, certResult, CertificateFingerprint.TrySha256Hex(clientCertContent));
         }
         catch (Exception ex)
         {
@@ -99,6 +131,7 @@ public class OvpnFileService(
                                "for CertName: {CommonName}", serverCertificate.Message, commonName);
         string revokedFilePath = MoveRevokedOvpnFile(ovpnFileName, ovpnFilePath, easyRsaPath);
         logger.LogInformation("Successfully moved revoked .ovpn file to: {RevokedFilePath}", revokedFilePath);
+        RemoveClientConfig(commonName);
 
         logger.LogInformation("Updated database for revoked certificate: {CommonName}, " +
                                "External ID: {ExternalId}", commonName, 0);
@@ -145,6 +178,19 @@ public class OvpnFileService(
         }
     }
     
+    // A revoked CN must not keep its pinned address; never fail the revoke over it.
+    private void RemoveClientConfig(string commonName)
+    {
+        try
+        {
+            clientConfigDirStore.Remove(commonName);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not remove ccd file for revoked {CommonName}", commonName);
+        }
+    }
+
     private string MoveRevokedOvpnFile(string ovpnFileName, string ovpnFilePath, string easyRsaPath)
     {
         var revokedOvpnFilesDirPath = Path.Combine(easyRsaPath, "pki", "revoked", "ovpn_files");

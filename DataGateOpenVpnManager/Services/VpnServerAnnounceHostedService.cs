@@ -5,7 +5,9 @@ using DataGateMonitor.SharedModels.DataGateMonitor.VpnServers.Requests;
 using DataGateMonitor.SharedModels.Enums;
 using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateOpenVpnManager.Services.LocalIssuance;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace DataGateOpenVpnManager.Services;
 
@@ -17,8 +19,13 @@ public sealed class VpnServerAnnounceHostedService(
     IHttpClientFactory httpClientFactory,
     IExternalIpAddressService externalIpAddressService,
     IConfiguration configuration,
+    LocalIssuanceOptions localIssuanceOptions,
+    IServiceProvider services,
     ILogger<VpnServerAnnounceHostedService> logger) : BackgroundService
 {
+    /// <summary>Extra announce field (not in SharedModels yet): node event-signing key, bound to the server on approve.</summary>
+    public const string NodePublicKeyField = "NodePublicKeyPem";
+
     public const string HttpClientName = nameof(VpnServerAnnounceHostedService);
     public const string DiscoverPath = "api/open-vpn-servers/discover";
     private const int MaxAttempts = 5;
@@ -93,7 +100,7 @@ public sealed class VpnServerAnnounceHostedService(
         };
 
         var client = httpClientFactory.CreateClient(HttpClientName);
-        var json = JsonConvert.SerializeObject(request);
+        var json = BuildAnnounceJson(request);
 
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
@@ -138,6 +145,16 @@ public sealed class VpnServerAnnounceHostedService(
         logger.LogWarning(
             "VPN server announce gave up after {MaxAttempts} attempts ({ApiUrl}).",
             MaxAttempts, apiUrl);
+    }
+
+    internal string BuildAnnounceJson(AnnounceVpnServerRequest request)
+    {
+        if (!localIssuanceOptions.Enabled)
+            return JsonConvert.SerializeObject(request);
+
+        var payload = JObject.FromObject(request);
+        payload[NodePublicKeyField] = services.GetRequiredService<INodeIdentity>().PublicKeyPem;
+        return payload.ToString(Formatting.None);
     }
 
     private static string ResolveSuggestedName()
