@@ -42,6 +42,19 @@ public class LocalIssuanceDefaultsTests
         Assert.Equal(expected, LocalIssuanceOptions.ResolveClientConfigDir(raw, "/openvpn-udp"));
     }
 
+    [Theory]
+    [InlineData(null, false, "255.255.255.0", 0)] // no ccd: server.conf untouched
+    [InlineData(null, true, "255.255.255.0", 32)]
+    [InlineData("0", true, "255.255.255.0", 0)]
+    [InlineData("54", true, "255.255.255.0", 54)]
+    [InlineData(null, true, "255.255.255.240", 0)] // /28 pool has 13 addresses: 32 would leave none
+    [InlineData("-1", true, "255.255.255.0", 0)]
+    [InlineData("abc", true, "255.255.255.0", 0)]
+    public void StaticIpReserved_ResolvesLikeServerConfScript(string? raw, bool ccd, string netmask, int expected)
+    {
+        Assert.Equal(expected, LocalIssuanceOptions.ResolveStaticIpReserved(raw, ccd, "10.50.28.0", netmask));
+    }
+
     [Fact]
     public void Disabled_RegistersNoNodeKeyNoOutboxNoDeliveryWorker()
     {

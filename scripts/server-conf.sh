@@ -7,6 +7,9 @@
 # Optional client-config-dir (off by default — output is byte-identical to the legacy heredoc):
 #   CLIENT_CONFIG_DIR  empty = off; "true"/"1"/"yes" = $DATA_DIR/ccd; otherwise an absolute path.
 #   CCD_EXCLUSIVE      true|1|yes adds "ccd-exclusive" (only CNs with a ccd file may connect).
+#   STATIC_IP_RESERVED with ccd on: how many addresses at the top of VPN_SUBNET are kept out of the dynamic pool
+#                      for ifconfig-push (default 32, 0 = off). OpenVPN's pool does not skip ccd addresses, so
+#                      without this a dynamic client can be handed a connected static client's IP.
 
 # Prints the effective ccd path (empty when disabled).
 resolve_client_config_dir() {
@@ -24,6 +27,49 @@ is_truthy() {
   esac
 }
 
+ip_to_int() {
+  local a b c d
+  IFS=. read -r a b c d <<< "$1"
+  echo $(( (a << 24) | (b << 16) | (c << 8) | d ))
+}
+
+int_to_ip() {
+  echo "$(( ($1 >> 24) & 255 )).$(( ($1 >> 16) & 255 )).$(( ($1 >> 8) & 255 )).$(( $1 & 255 ))"
+}
+
+# Prints the effective number of reserved static addresses (0 = none). Same rules as
+# LocalIssuanceOptions.StaticIpReserved: ccd on, default 32, and the dynamic pool must keep at least one address.
+static_ip_reserved_count() {
+  [ -n "$(resolve_client_config_dir)" ] || { echo 0; return; }
+  local wanted="${STATIC_IP_RESERVED:-32}"
+  [[ "$wanted" =~ ^[0-9]+$ ]] || { echo "server-conf: STATIC_IP_RESERVED='$wanted' is not a number; not reserving" >&2; echo 0; return; }
+  local net mask bcast pool_size
+  mask=$(ip_to_int "$VPN_NETMASK")
+  net=$(( $(ip_to_int "$VPN_SUBNET") & mask ))
+  bcast=$(( net | (~mask & 0xFFFFFFFF) ))
+  pool_size=$(( bcast - 1 - (net + 2) + 1 ))
+  if [ "$wanted" -ge "$pool_size" ]; then
+    echo "server-conf: STATIC_IP_RESERVED=$wanted leaves no dynamic pool in $VPN_SUBNET/$VPN_NETMASK; not reserving" >&2
+    echo 0; return
+  fi
+  echo "$wanted"
+}
+
+# "server" line; with a static reservation the pool is declared explicitly without the top addresses.
+render_server_lines() {
+  local reserved net mask bcast
+  reserved=$(static_ip_reserved_count)
+  if [ "$reserved" -eq 0 ]; then
+    echo "server $VPN_SUBNET $VPN_NETMASK"
+    return
+  fi
+  mask=$(ip_to_int "$VPN_NETMASK")
+  net=$(( $(ip_to_int "$VPN_SUBNET") & mask ))
+  bcast=$(( net | (~mask & 0xFFFFFFFF) ))
+  echo "server $VPN_SUBNET $VPN_NETMASK nopool"
+  echo "ifconfig-pool $(int_to_ip $(( net + 2 ))) $(int_to_ip $(( bcast - 1 - reserved ))) $VPN_NETMASK"
+}
+
 render_server_conf() {
 cat <<EOF
 port $PORT
@@ -38,7 +84,7 @@ dh none
 tls-groups prime256v1
 
 topology subnet
-server $VPN_SUBNET $VPN_NETMASK
+$(render_server_lines)
 ifconfig-pool-persist /etc/openvpn/ipp.txt
 
 push "dhcp-option DNS $DNS1"

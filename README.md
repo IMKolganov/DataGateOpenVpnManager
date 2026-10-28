@@ -232,6 +232,7 @@ All of it is **off by default**; a node without these variables renders the same
 | `LOCAL_ISSUANCE_ENABLED` | `false` | Admin socket, node key, event outbox + delivery to the backend. |
 | `CLIENT_CONFIG_DIR` | empty (off) | Adds `client-config-dir`; `true` = `$DATA_DIR/ccd`, or an absolute path. Needed for `--static-ip`. |
 | `CCD_EXCLUSIVE` | `false` | Adds `ccd-exclusive` (only CNs with a ccd file connect; every issued profile then gets one). |
+| `STATIC_IP_RESERVED` | `32` (with ccd) | Top addresses of `VPN_SUBNET` kept out of the dynamic pool for static IPs: `server … nopool` + `ifconfig-pool` (e.g. /24 → pool `.2-.222`, static `.223-.254`). `0` = off. |
 | `LOCAL_ISSUANCE_DIR` | `$DATA_DIR/local-issuance` | Private dir (0700): `admin.sock`, `node-identity.key`, `outbox/`, `profiles.json`, optional `client-template.ovpn`. |
 
 ```bash
@@ -244,8 +245,9 @@ docker exec openvpn-udp datagate-profile node-id     # key fingerprint to compar
 * `--service` adds `pull-filter ignore "redirect-gateway" | "dhcp-option" | "block-outside-dns"`: only VPN-internal
   traffic uses the tunnel. `--static-ip` writes `ifconfig-push <ip> <netmask>` to ccd (must be inside `VPN_SUBNET`,
   not network/broadcast/server address, not used by another CN in ccd, `ipp.txt` or by a client connected right
-  now per the management interface). Prefer addresses at the top of the subnet — the dynamic pool hands out from
-  the bottom and does not know about ccd addresses, so a later dynamic client can still be given the same one.
+  now per the management interface) and, with `STATIC_IP_RESERVED`, must lie in the reserved top range. OpenVPN's
+  pool does not skip `ifconfig-push` addresses ([Concepts-Addressing](https://community.openvpn.net/openvpn/wiki/Concepts-Addressing)),
+  so a static IP inside the pool can later be handed to a dynamic client; the reservation makes that impossible.
 * `revoke`/`get` go by serial number, not CN (easy-rsa allows the same CN several times in `index.txt`): a profile
   already revoked from the dashboard is only recorded, and if the CN was re-issued since, the newer certificate
   is never touched.

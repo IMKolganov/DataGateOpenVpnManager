@@ -22,6 +22,25 @@ public sealed class VpnSubnet
     /// <summary>OpenVPN takes the first host address of the pool for the server side of tun.</summary>
     public IPAddress ServerAddress => ToAddress(_network + 1);
 
+    /// <summary>Addresses OpenVPN's <c>server</c> pool spans: network+2 .. broadcast-1.</summary>
+    public int DynamicPoolSize => (int)((_network | ~_mask) - 1 - (_network + 2) + 1);
+
+    /// <summary>Top <paramref name="count"/> pool addresses kept for ifconfig-push (scripts/server-conf.sh).</summary>
+    public (IPAddress First, IPAddress Last) StaticReservedRange(int count)
+    {
+        var last = (_network | ~_mask) - 1;
+        return (ToAddress(last - (uint)count + 1), ToAddress(last));
+    }
+
+    public bool IsInStaticReservedRange(IPAddress address, int count)
+    {
+        if (count <= 0 || !Contains(address))
+            return false;
+        var value = ToUInt(address);
+        var last = (_network | ~_mask) - 1;
+        return value <= last && value > last - (uint)count;
+    }
+
     public static VpnSubnet Parse(string subnet, string netmask)
     {
         var network = ToUInt(ParseIPv4(subnet, "VPN_SUBNET"));

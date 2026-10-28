@@ -43,6 +43,7 @@ services:
       # LOCAL_ISSUANCE_ENABLED: "true"
       # CLIENT_CONFIG_DIR: "true"     # client-config-dir at $DATA_DIR/ccd (needed for --static-ip)
       # CCD_EXCLUSIVE: "false"
+      # STATIC_IP_RESERVED: "32"     # with ccd: top addresses kept out of the dynamic pool for --static-ip
 
 
 networks:

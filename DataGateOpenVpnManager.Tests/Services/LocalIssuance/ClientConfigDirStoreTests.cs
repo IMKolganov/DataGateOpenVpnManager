@@ -10,7 +10,7 @@ public class ClientConfigDirStoreTests : IDisposable
     private readonly TempDir _dir = new();
 
     private ClientConfigDirStore CreateStore(bool enabled = true, bool exclusive = false,
-        IOpenVpnManagementStatusCache? managementStatus = null) =>
+        IOpenVpnManagementStatusCache? managementStatus = null, int staticIpReserved = 0) =>
         new(new LocalIssuanceOptions
         {
             ClientConfigDir = enabled ? _dir.Combine("ccd") : null,
@@ -18,6 +18,7 @@ public class ClientConfigDirStoreTests : IDisposable
             VpnSubnet = "10.50.28.0",
             VpnNetmask = "255.255.255.0",
             IppFile = _dir.Combine("ipp.txt"),
+            StaticIpReserved = staticIpReserved,
         }, NullLogger<ClientConfigDirStore>.Instance, managementStatus);
 
     public void Dispose() => _dir.Dispose();
@@ -121,6 +122,23 @@ public class ClientConfigDirStoreTests : IDisposable
         var store = CreateStore(managementStatus: new FakeManagementStatus(false, ("alice", "10.50.28.2")));
 
         await store.ValidateStaticIpAsync("db1", "10.50.28.2", CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("10.50.28.201", false)] // inside OpenVPN's dynamic pool (.2-.222)
+    [InlineData("10.50.28.222", false)]
+    [InlineData("10.50.28.223", true)]
+    [InlineData("10.50.28.254", true)]
+    public async Task ValidateStaticIp_WithReservation_OnlyAcceptsReservedRange(string ip, bool accepted)
+    {
+        var store = CreateStore(staticIpReserved: 32);
+
+        var ex = await Record.ExceptionAsync(() => store.ValidateStaticIpAsync("db1", ip, CancellationToken.None));
+
+        if (accepted)
+            Assert.Null(ex);
+        else
+            Assert.Contains("10.50.28.223-10.50.28.254", Assert.IsType<LocalIssuanceValidationException>(ex).Message);
     }
 
     [Fact]

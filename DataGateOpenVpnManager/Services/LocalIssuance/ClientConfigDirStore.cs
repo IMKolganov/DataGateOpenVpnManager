@@ -42,6 +42,15 @@ public sealed class ClientConfigDirStore(
         if (!subnet.IsAssignableClientAddress(address, out var reason))
             throw new LocalIssuanceValidationException(reason);
 
+        // OpenVPN's pool does not skip ifconfig-push addresses; only the reserved range is out of its reach.
+        if (options.StaticIpReserved > 0 && !subnet.IsInStaticReservedRange(address, options.StaticIpReserved))
+        {
+            var (first, last) = subnet.StaticReservedRange(options.StaticIpReserved);
+            throw new LocalIssuanceValidationException(
+                $"{address} is in OpenVPN's dynamic pool; static IPs must be within {first}-{last} " +
+                $"({LocalIssuanceOptions.StaticIpReservedKey}={options.StaticIpReserved}).");
+        }
+
         var normalized = address.ToString();
         foreach (var (cn, ip) in ReadStaticAssignments())
         {
