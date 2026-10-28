@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 using DataGateMonitor.SharedModels.Enums;
@@ -24,6 +26,7 @@ public class LocalProfileServiceTests : IDisposable
     private readonly LocalIssuanceOptions _options;
     private readonly ClientConfigDirStore _ccd;
     private OvpnIssueRequest? _lastIssue;
+    private string _issuedSerial = "5E71A1";
 
     public LocalProfileServiceTests()
     {
@@ -44,12 +47,35 @@ public class LocalProfileServiceTests : IDisposable
                 _lastIssue = r;
                 return new OvpnIssueResult(
                     new OvpnFileMetadata { CommonName = r.CommonName, FileName = $"{r.CommonName}.ovpn", FilePath = $"/x/{r.CommonName}.ovpn", IssuedTo = r.IssuedTo, CertFilePath = "c", KeyFilePath = "k" },
-                    new ServerCertificate { CommonName = r.CommonName, SerialNumber = "5E71A1", Status = CertificateStatus.Active },
+                    new ServerCertificate { CommonName = r.CommonName, SerialNumber = _issuedSerial, Status = CertificateStatus.Active },
                     new string('f', 64));
             });
     }
 
     public void Dispose() => _dir.Dispose();
+
+    private void IndexEntry(string cn, string serial, bool revoked) => _index.Add(new ServerCertificate
+    {
+        CommonName = cn,
+        SerialNumber = serial,
+        IsRevoked = revoked,
+        Status = revoked ? CertificateStatus.Revoked : CertificateStatus.Active,
+    });
+
+    /// <summary>pki/issued/{cn}.crt with exactly these DER serial bytes (as easy-rsa would leave it).</summary>
+    private void WriteIssuedCert(string cn, string derSerialHex)
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var name = new X500DistinguishedName($"CN={cn}");
+        var request = new CertificateRequest(name, key, HashAlgorithmName.SHA256);
+        using var cert = request.Create(name, X509SignatureGenerator.CreateForECDsa(key),
+            DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30), Convert.FromHexString(derSerialHex));
+        File.WriteAllText(_dir.Combine("easy-rsa", "pki", "issued", $"{cn}.crt"), cert.ExportCertificatePem());
+    }
+
+    private void VerifyNeverRevokedInPki() =>
+        _ovpn.Verify(o => o.RevokeOvpnFile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
 
     private LocalProfileService Create(Dictionary<string, string?>? config = null)
     {
@@ -132,6 +158,8 @@ public class LocalProfileServiceTests : IDisposable
     {
         var service = Create();
         await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true }, CancellationToken.None);
+        IndexEntry("db1", "5E71A1", revoked: false);
+        WriteIssuedCert("db1", "5E71A1");
 
         await service.RevokeAsync("db1", CancellationToken.None);
 
@@ -140,26 +168,108 @@ public class LocalProfileServiceTests : IDisposable
         Assert.Null(_registry.FindActive("db1"));
     }
 
+    // Serials as easy-rsa 3.1.0/3.1.7/3.2.7 actually produce them (index.txt form vs the DER bytes .NET reads).
+    [Theory]
+    [InlineData("F5A1C0FFEE0011223344556677889900", "00F5A1C0FFEE0011223344556677889900")] // high bit: .NET adds 00
+    [InlineData("0CDE25A6AF8C33195EE2DBC6A53BD5", "0CDE25A6AF8C33195EE2DBC6A53BD5")] // 30 chars (3.1.x, leading 00 byte dropped)
+    [InlineData("4BFB5D624672DB2A7B354E67F5881B9E", "4BFB5D624672DB2A7B354E67F5881B9E")]
+    public async Task Revoke_MatchesIssuedCertificate_AcrossSerialFormats(string indexSerial, string derSerial)
+    {
+        _issuedSerial = indexSerial;
+        var service = Create();
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1" }, CancellationToken.None);
+        IndexEntry("db1", indexSerial, revoked: false);
+        WriteIssuedCert("db1", derSerial);
+
+        await service.RevokeAsync("db1", CancellationToken.None);
+
+        _ovpn.Verify(o => o.RevokeOvpnFile(It.IsAny<string>(), "db1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()));
+    }
+
     [Fact]
-    public async Task Revoke_WhenCertificateAlreadyGone_StillFreesStaticIp_AndQueuesEvent()
+    public async Task Revoke_AlreadyRevokedFromDashboard_RecordsIt_FreesStaticIp_WithoutTouchingPki()
     {
         var service = Create();
         await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true }, CancellationToken.None);
         await _ccd.WriteAsync("db1", null, CancellationToken.None);
-        _ovpn.Setup(o => o.RevokeOvpnFile(It.IsAny<string>(), "db1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new FileNotFoundException("gone"));
+        IndexEntry("db1", "5E71A1", revoked: true);
 
-        await service.RevokeAsync("db1", CancellationToken.None);
+        var view = await service.RevokeAsync("db1", CancellationToken.None);
 
+        VerifyNeverRevokedInPki();
+        Assert.Equal("revoked", view.Status);
         Assert.False(File.Exists(_dir.Combine("ccd", "db1")));
-        Assert.Equal("revoked", _events.Last().EventType);
+        Assert.Equal(("revoked", "5E71A1"), (_events.Last().EventType, _events.Last().SerialNumber));
+        Assert.Null(_registry.FindActive("db1"));
+    }
+
+    [Fact]
+    public async Task Revoke_AfterDashboardRevokedAndReissuedSameCn_LeavesTheNewCertificateAlone()
+    {
+        var service = Create();
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "router" }, CancellationToken.None);
+        // Dashboard revoked our 5E71A1, then issued "router" again: index.txt now lists the CN twice.
+        IndexEntry("router", "5E71A1", revoked: true);
+        IndexEntry("router", "C0FFEE", revoked: false);
+        WriteIssuedCert("router", "C0FFEE");
+        await _ccd.WriteAsync("router", null, CancellationToken.None);
+
+        await service.RevokeAsync("router", CancellationToken.None);
+
+        VerifyNeverRevokedInPki();
+        Assert.True(File.Exists(_dir.Combine("ccd", "router")));
+        Assert.Equal(("revoked", "5E71A1"), (_events.Last().EventType, _events.Last().SerialNumber));
+    }
+
+    [Theory]
+    [InlineData("C0FFEE")]
+    [InlineData(null)]
+    public async Task Revoke_WhenIssuedFileIsNotThisCertificate_IsConflict_AndChangesNothing(string? issuedSerial)
+    {
+        var service = Create();
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1" }, CancellationToken.None);
+        IndexEntry("db1", "5E71A1", revoked: false);
+        if (issuedSerial is not null)
+            WriteIssuedCert("db1", issuedSerial);
+
+        var ex = await Assert.ThrowsAsync<LocalIssuanceValidationException>(() => service.RevokeAsync("db1", CancellationToken.None));
+
+        Assert.True(ex.IsConflict);
+        VerifyNeverRevokedInPki();
+        Assert.NotNull(_registry.FindActive("db1"));
+        Assert.Single(_events);
+    }
+
+    [Fact]
+    public async Task Revoke_SerialMissingFromIndex_IsConflict()
+    {
+        var service = Create();
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1" }, CancellationToken.None);
+        WriteIssuedCert("db1", "5E71A1");
+
+        var ex = await Assert.ThrowsAsync<LocalIssuanceValidationException>(() => service.RevokeAsync("db1", CancellationToken.None));
+
+        Assert.True(ex.IsConflict);
+        VerifyNeverRevokedInPki();
+    }
+
+    [Fact]
+    public async Task GetOvpn_RevokedFromDashboard_IsRefused()
+    {
+        var service = Create();
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1" }, CancellationToken.None);
+        IndexEntry("db1", "5E71A1", revoked: true);
+
+        var ex = await Assert.ThrowsAsync<LocalIssuanceValidationException>(() => service.GetOvpnAsync("db1", CancellationToken.None));
+
+        Assert.Contains("revoked", ex.Message);
     }
 
     [Fact]
     public async Task Revoke_DashboardIssuedCn_IsRefused()
     {
         await Assert.ThrowsAsync<LocalIssuanceValidationException>(() => Create().RevokeAsync("dashboard-user", CancellationToken.None));
-        _ovpn.Verify(o => o.RevokeOvpnFile(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        VerifyNeverRevokedInPki();
     }
 
     [Fact]

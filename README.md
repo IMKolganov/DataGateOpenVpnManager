@@ -245,6 +245,9 @@ docker exec openvpn-udp datagate-profile node-id     # key fingerprint to compar
   traffic uses the tunnel. `--static-ip` writes `ifconfig-push <ip> <netmask>` to ccd (must be inside `VPN_SUBNET`,
   not network/broadcast/server address, not used by another CN in ccd or `ipp.txt`). Prefer addresses at the top
   of the subnet — the dynamic pool hands out from the bottom.
+* `revoke`/`get` go by serial number, not CN (easy-rsa allows the same CN several times in `index.txt`): a profile
+  already revoked from the dashboard is only recorded, and if the CN was re-issued since, the newer certificate
+  is never touched.
 * **Channel:** a Unix socket in the 0700 root-owned dir — not loopback, because with `network_mode: host` every
   process reaches 127.0.0.1 (and with `OPENVPN_WSS_UDP_PROXY=rust` all public traffic reaches Kestrel from
   loopback). `/api/local-admin/*` answers 404 on the TCP port, with or without a JWT.

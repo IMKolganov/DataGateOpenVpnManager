@@ -163,17 +163,36 @@ public sealed partial class LocalProfileService(
                      ?? throw new LocalIssuanceValidationException(
                          $"'{commonName}' is not an active locally issued profile. Profiles issued from the dashboard are revoked there.");
 
-        try
+        var easyRsaPath = easyRsaPathResolver.GetEasyRsaPath();
+        var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(easyRsaPath, cancellationToken);
+        var indexEntry = FindBySerial(certificates, record.SerialNumber);
+
+        if (indexEntry is { IsRevoked: true })
         {
-            await ovpnFileService.RevokeOvpnFile(
-                easyRsaPathResolver.GetEasyRsaPath(), commonName, record.FileName, record.FilePath, cancellationToken);
+            // Revoked elsewhere (the dashboard, or a crash before the registry write): record it, leave the PKI alone.
+            logger.LogWarning("{CommonName} (serial {Serial}) is already revoked in index.txt; recording it.",
+                commonName, record.SerialNumber);
+            // ccd files are per CN: keep it when a newer valid certificate already owns this CN.
+            if (!certificates.Any(c => string.Equals(c.CommonName, commonName, StringComparison.Ordinal) && IsActive(c)))
+                clientConfigDirStore.Remove(commonName);
         }
-        catch (FileNotFoundException)
+        else
         {
-            // Already revoked elsewhere (e.g. from the dashboard): still record it and tell the backend.
-            logger.LogWarning("Certificate for {CommonName} is already gone from pki/issued; recording revoke.", commonName);
-            // RevokeOvpnFile did not get to its ccd cleanup; free the pinned address here.
-            clientConfigDirStore.Remove(commonName);
+            if (indexEntry is null)
+                throw new LocalIssuanceValidationException(
+                    $"Serial {record.SerialNumber} of '{commonName}' is not in easy-rsa index.txt; nothing was revoked.",
+                    isConflict: true);
+
+            // easy-rsa revokes by file name (pki/issued/<CN>.crt) in every version, never by serial:
+            // the CN may have been re-issued since, so make sure that file is still this profile's certificate.
+            var issuedSerial = CertificateSerial.TryReadFromFile(Path.Combine(easyRsaPath, "pki", "issued", $"{commonName}.crt"));
+            if (!CertificateSerial.AreEqual(issuedSerial, record.SerialNumber))
+                throw new LocalIssuanceValidationException(
+                    $"pki/issued/{commonName}.crt is {(issuedSerial is null ? "missing" : $"another certificate (serial {issuedSerial})")}, " +
+                    $"not this profile's serial {record.SerialNumber}; nothing was revoked.",
+                    isConflict: true);
+
+            await ovpnFileService.RevokeOvpnFile(easyRsaPath, commonName, record.FileName, record.FilePath, cancellationToken);
         }
 
         var now = timeProvider.GetUtcNow();
@@ -190,14 +209,14 @@ public sealed partial class LocalProfileService(
         var easyRsaPath = easyRsaPathResolver.GetEasyRsaPath();
         var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(easyRsaPath, cancellationToken);
         var serverSerial = TryReadServerSerial(easyRsaPath);
-        var local = registry.List().ToDictionary(r => r.SerialNumber, StringComparer.OrdinalIgnoreCase);
+        var local = registry.List().ToDictionary(r => CertificateSerial.Normalize(r.SerialNumber), StringComparer.Ordinal);
 
         var views = new List<LocalProfileView>();
         // The OpenVPN server's own certificate (CN is often "OpenVPN-Server", not "server") is not a client profile.
         foreach (var cert in certificates.Where(c => !string.Equals(c.CommonName, "server", StringComparison.Ordinal)
-                                                     && !string.Equals(c.SerialNumber.TrimStart('0'), serverSerial, StringComparison.OrdinalIgnoreCase)))
+                                                     && !CertificateSerial.AreEqual(c.SerialNumber, serverSerial)))
         {
-            if (local.Remove(cert.SerialNumber, out var record))
+            if (local.Remove(CertificateSerial.Normalize(cert.SerialNumber), out var record))
             {
                 views.Add(ToView(record, StatusOf(cert)));
                 continue;
@@ -224,27 +243,24 @@ public sealed partial class LocalProfileService(
         EnsureEnabled();
         var record = registry.FindActive(commonName)
                      ?? throw new LocalIssuanceValidationException($"'{commonName}' is not an active locally issued profile.");
+        var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(
+            easyRsaPathResolver.GetEasyRsaPath(), cancellationToken);
+        var indexEntry = FindBySerial(certificates, record.SerialNumber);
+        if (indexEntry is null || indexEntry.IsRevoked)
+            throw new LocalIssuanceValidationException(
+                $"'{commonName}' (serial {record.SerialNumber}) is {(indexEntry is null ? "not in easy-rsa index.txt" : "revoked")}; " +
+                "there is no valid profile to download.");
         if (!File.Exists(record.FilePath))
             throw new LocalIssuanceValidationException($".ovpn for '{commonName}' is missing at {record.FilePath}.");
         return await File.ReadAllTextAsync(record.FilePath, cancellationToken);
     }
 
-    private static string? TryReadServerSerial(string easyRsaPath)
-    {
-        try
-        {
-            var path = Path.Combine(easyRsaPath, "pki", "issued", "server.crt");
-            if (!File.Exists(path))
-                return null;
-            using var cert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(File.ReadAllText(path));
-            // X509 keeps the DER sign byte ("00F5…"); easy-rsa index.txt does not ("F5…").
-            return cert.SerialNumber.TrimStart('0');
-        }
-        catch (System.Security.Cryptography.CryptographicException)
-        {
-            return null;
-        }
-    }
+    private static string? TryReadServerSerial(string easyRsaPath) =>
+        CertificateSerial.TryReadFromFile(Path.Combine(easyRsaPath, "pki", "issued", "server.crt"));
+
+    /// <summary>index.txt may list one CN several times (unique_subject = no); only the serial identifies a certificate.</summary>
+    private static ServerCertificate? FindBySerial(IEnumerable<ServerCertificate> certificates, string serial) =>
+        certificates.FirstOrDefault(c => CertificateSerial.AreEqual(c.SerialNumber, serial));
 
     private void EnsureEnabled()
     {
