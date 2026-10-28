@@ -219,6 +219,43 @@ Wazuh rule **100913** should match `[OpenVpnTlsAppClient]` instead of the raw `T
 
 ---
 
+## 🔐 Local profile issuance (service profiles)
+
+Issue profiles **on the node itself** (no dashboard request) — e.g. a home hub handing service profiles to
+servers that must reach a host inside the VPN at boot. The node reports every local issue/revoke to the
+backend, so the dashboard lists them (labels *Issued locally* / *Service*, static IP) and can revoke them.
+
+All of it is **off by default**; a node without these variables renders the same `server.conf` as before.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LOCAL_ISSUANCE_ENABLED` | `false` | Admin socket, node key, event outbox + delivery to the backend. |
+| `CLIENT_CONFIG_DIR` | empty (off) | Adds `client-config-dir`; `true` = `$DATA_DIR/ccd`, or an absolute path. Needed for `--static-ip`. |
+| `CCD_EXCLUSIVE` | `false` | Adds `ccd-exclusive` (only CNs with a ccd file connect; every issued profile then gets one). |
+| `LOCAL_ISSUANCE_DIR` | `$DATA_DIR/local-issuance` | Private dir (0700): `admin.sock`, `node-identity.key`, `outbox/`, `profiles.json`, optional `client-template.ovpn`. |
+
+```bash
+docker exec openvpn-udp datagate-profile create upcloud-db1 --service --static-ip 10.50.28.201 > upcloud-db1.ovpn
+docker exec openvpn-udp datagate-profile list
+docker exec openvpn-udp datagate-profile revoke upcloud-db1
+docker exec openvpn-udp datagate-profile node-id     # key fingerprint to compare in the dashboard
+```
+
+* `--service` adds `pull-filter ignore "redirect-gateway" | "dhcp-option" | "block-outside-dns"`: only VPN-internal
+  traffic uses the tunnel. `--static-ip` writes `ifconfig-push <ip> <netmask>` to ccd (must be inside `VPN_SUBNET`,
+  not network/broadcast/server address, not used by another CN in ccd or `ipp.txt`). Prefer addresses at the top
+  of the subnet — the dynamic pool hands out from the bottom.
+* **Channel:** a Unix socket in the 0700 root-owned dir — not loopback, because with `network_mode: host` every
+  process reaches 127.0.0.1 (and with `OPENVPN_WSS_UDP_PROXY=rust` all public traffic reaches Kestrel from
+  loopback). `/api/local-admin/*` answers 404 on the TCP port, with or without a JWT.
+* **Backend trust:** the node signs events with its own ECDSA P-256 key (`node-identity.key`, never leaves the
+  node). The public key is sent with the discovery announce and becomes trusted when an admin approves the node
+  (the review page shows its fingerprint). For a node registered earlier, the backend fetches the key via
+  `GET /api/node-identity` with its JWT; if the node is unreachable (NAT), trust the pending key via
+  `POST /api/open-vpn-servers/{id}/node-key/trust {"fingerprint": "..."}` after comparing with `node-id`.
+* **Delivery:** events are fsync'ed to `outbox/` and retried with backoff until the backend acknowledges them;
+  container restarts lose nothing, and the backend is idempotent by certificate serial.
+
 ## ⚠ Notes
 
 * Requires `--cap-add=NET_ADMIN` to allow iptables setup

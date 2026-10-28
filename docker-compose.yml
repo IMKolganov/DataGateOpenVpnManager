@@ -39,6 +39,10 @@ services:
       TUN_DEV: ovpn-udp
       # UDP WSS datapath: dotnet (default) | rust
       # OPENVPN_WSS_UDP_PROXY: rust
+      # Local profile issuance (datagate-profile inside the container) — see README
+      # LOCAL_ISSUANCE_ENABLED: "true"
+      # CLIENT_CONFIG_DIR: "true"     # client-config-dir at $DATA_DIR/ccd (needed for --static-ip)
+      # CCD_EXCLUSIVE: "false"
 
 
 networks:

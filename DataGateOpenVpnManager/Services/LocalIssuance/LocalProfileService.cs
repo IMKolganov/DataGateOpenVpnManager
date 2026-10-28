@@ -55,6 +55,7 @@ public sealed partial class LocalProfileService(
     IEasyRsaPathResolver easyRsaPathResolver,
     ILocalProfileRegistry registry,
     ILocalIssuanceOutbox outbox,
+    IClientConfigDirStore clientConfigDirStore,
     IConfiguration configuration,
     TimeProvider timeProvider,
     ILogger<LocalProfileService> logger) : ILocalProfileService
@@ -171,6 +172,8 @@ public sealed partial class LocalProfileService(
         {
             // Already revoked elsewhere (e.g. from the dashboard): still record it and tell the backend.
             logger.LogWarning("Certificate for {CommonName} is already gone from pki/issued; recording revoke.", commonName);
+            // RevokeOvpnFile did not get to its ccd cleanup; free the pinned address here.
+            clientConfigDirStore.Remove(commonName);
         }
 
         var now = timeProvider.GetUtcNow();
@@ -184,12 +187,15 @@ public sealed partial class LocalProfileService(
     public async Task<IReadOnlyList<LocalProfileView>> ListAsync(CancellationToken cancellationToken)
     {
         EnsureEnabled();
-        var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(
-            easyRsaPathResolver.GetEasyRsaPath(), cancellationToken);
+        var easyRsaPath = easyRsaPathResolver.GetEasyRsaPath();
+        var certificates = await easyRsaService.GetAllCertificateInfoInIndexFileAsync(easyRsaPath, cancellationToken);
+        var serverSerial = TryReadServerSerial(easyRsaPath);
         var local = registry.List().ToDictionary(r => r.SerialNumber, StringComparer.OrdinalIgnoreCase);
 
         var views = new List<LocalProfileView>();
-        foreach (var cert in certificates.Where(c => !string.Equals(c.CommonName, "server", StringComparison.Ordinal)))
+        // The OpenVPN server's own certificate (CN is often "OpenVPN-Server", not "server") is not a client profile.
+        foreach (var cert in certificates.Where(c => !string.Equals(c.CommonName, "server", StringComparison.Ordinal)
+                                                     && !string.Equals(c.SerialNumber.TrimStart('0'), serverSerial, StringComparison.OrdinalIgnoreCase)))
         {
             if (local.Remove(cert.SerialNumber, out var record))
             {
@@ -221,6 +227,23 @@ public sealed partial class LocalProfileService(
         if (!File.Exists(record.FilePath))
             throw new LocalIssuanceValidationException($".ovpn for '{commonName}' is missing at {record.FilePath}.");
         return await File.ReadAllTextAsync(record.FilePath, cancellationToken);
+    }
+
+    private static string? TryReadServerSerial(string easyRsaPath)
+    {
+        try
+        {
+            var path = Path.Combine(easyRsaPath, "pki", "issued", "server.crt");
+            if (!File.Exists(path))
+                return null;
+            using var cert = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(File.ReadAllText(path));
+            // X509 keeps the DER sign byte ("00F5…"); easy-rsa index.txt does not ("F5…").
+            return cert.SerialNumber.TrimStart('0');
+        }
+        catch (System.Security.Cryptography.CryptographicException)
+        {
+            return null;
+        }
     }
 
     private void EnsureEnabled()

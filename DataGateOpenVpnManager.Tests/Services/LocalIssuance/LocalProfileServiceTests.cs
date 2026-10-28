@@ -22,12 +22,15 @@ public class LocalProfileServiceTests : IDisposable
     private readonly List<ServerCertificate> _index = [];
     private readonly LocalProfileRegistry _registry;
     private readonly LocalIssuanceOptions _options;
+    private readonly ClientConfigDirStore _ccd;
     private OvpnIssueRequest? _lastIssue;
 
     public LocalProfileServiceTests()
     {
         _options = new LocalIssuanceOptions { Enabled = true, Directory = _dir.Combine("li") };
         _registry = new LocalProfileRegistry(_options);
+        _ccd = new ClientConfigDirStore(new LocalIssuanceOptions { ClientConfigDir = _dir.Combine("ccd") },
+            NullLogger<ClientConfigDirStore>.Instance);
         Directory.CreateDirectory(_dir.Combine("easy-rsa", "pki", "issued"));
 
         _easyRsa.Setup(e => e.GetAllCertificateInfoInIndexFileAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -52,7 +55,7 @@ public class LocalProfileServiceTests : IDisposable
     {
         var paths = new Mock<IEasyRsaPathResolver>();
         paths.Setup(p => p.GetEasyRsaPath()).Returns(_dir.Combine("easy-rsa"));
-        return new LocalProfileService(_options, _ovpn.Object, _easyRsa.Object, paths.Object, _registry, _outbox.Object,
+        return new LocalProfileService(_options, _ovpn.Object, _easyRsa.Object, paths.Object, _registry, _outbox.Object, _ccd,
             new ConfigurationBuilder().AddInMemoryCollection(config ?? new() { ["PUBLIC_IP"] = "203.0.113.10", ["PORT"] = "1295" }).Build(),
             TimeProvider.System, NullLogger<LocalProfileService>.Instance);
     }
@@ -138,6 +141,21 @@ public class LocalProfileServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Revoke_WhenCertificateAlreadyGone_StillFreesStaticIp_AndQueuesEvent()
+    {
+        var service = Create();
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true }, CancellationToken.None);
+        await _ccd.WriteAsync("db1", null, CancellationToken.None);
+        _ovpn.Setup(o => o.RevokeOvpnFile(It.IsAny<string>(), "db1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new FileNotFoundException("gone"));
+
+        await service.RevokeAsync("db1", CancellationToken.None);
+
+        Assert.False(File.Exists(_dir.Combine("ccd", "db1")));
+        Assert.Equal("revoked", _events.Last().EventType);
+    }
+
+    [Fact]
     public async Task Revoke_DashboardIssuedCn_IsRefused()
     {
         await Assert.ThrowsAsync<LocalIssuanceValidationException>(() => Create().RevokeAsync("dashboard-user", CancellationToken.None));
@@ -164,7 +182,7 @@ public class LocalProfileServiceTests : IDisposable
     public async Task Disabled_RefusesEverything()
     {
         var disabled = new LocalProfileService(new LocalIssuanceOptions { Enabled = false, Directory = _dir.Combine("off") },
-            _ovpn.Object, _easyRsa.Object, Mock.Of<IEasyRsaPathResolver>(), _registry, _outbox.Object,
+            _ovpn.Object, _easyRsa.Object, Mock.Of<IEasyRsaPathResolver>(), _registry, _outbox.Object, _ccd,
             new ConfigurationBuilder().Build(), TimeProvider.System, NullLogger<LocalProfileService>.Instance);
 
         await Assert.ThrowsAsync<LocalIssuanceValidationException>(() =>
