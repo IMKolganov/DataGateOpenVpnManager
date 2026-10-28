@@ -73,23 +73,11 @@ public class OvpnFileServiceIssueTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private (OvpnFileService Service, ClientConfigDirStore Ccd) Create(bool ccdEnabled = true, bool ccdExclusive = false)
-    {
-        var ccd = new ClientConfigDirStore(new LocalIssuanceOptions
-        {
-            ClientConfigDir = ccdEnabled ? _dir.Combine("ccd") : null,
-            CcdExclusive = ccdExclusive,
-            VpnSubnet = "10.50.28.0",
-            VpnNetmask = "255.255.255.0",
-            IppFile = _dir.Combine("ipp.txt"),
-        }, NullLogger<ClientConfigDirStore>.Instance);
-        var service = new OvpnFileService(Mock.Of<ILogger<IOvpnFileService>>(), _easyRsa.Object,
-            Options.Create(new EasyRsaOptions()), _tracker.Object,
-            new ConfigurationBuilder().AddInMemoryCollection().Build(), ccd);
-        return (service, ccd);
-    }
+    private OvpnFileService Create() => new(Mock.Of<ILogger<IOvpnFileService>>(), _easyRsa.Object,
+        Options.Create(new EasyRsaOptions()), _tracker.Object,
+        new ConfigurationBuilder().AddInMemoryCollection().Build());
 
-    private OvpnIssueRequest Request(bool service = false, string? staticIp = null) => new()
+    private OvpnIssueRequest Request(bool service = false) => new()
     {
         EasyRsaPath = _dir.Combine("easy-rsa"),
         CommonName = "db1",
@@ -98,15 +86,14 @@ public class OvpnFileServiceIssueTests : IDisposable
         ServerIp = "203.0.113.10",
         ServerPort = 1194,
         IsServiceProfile = service,
-        StaticIp = staticIp,
     };
 
     [Fact]
-    public async Task Issue_ServiceProfile_HasPullFilters_AndCcdWithStaticIp()
+    public async Task Issue_ServiceProfile_HasPullFilters()
     {
-        var (service, _) = Create();
+        var service = Create();
 
-        var result = await service.IssueOvpnFile(Request(service: true, staticIp: "10.50.28.201"), CancellationToken.None);
+        var result = await service.IssueOvpnFile(Request(service: true), CancellationToken.None);
 
         var ovpn = await File.ReadAllTextAsync(result.Metadata.FilePath);
         Assert.Contains("pull-filter ignore \"redirect-gateway\"", ovpn);
@@ -114,66 +101,18 @@ public class OvpnFileServiceIssueTests : IDisposable
         Assert.Contains("pull-filter ignore \"block-outside-dns\"", ovpn);
         Assert.Contains("remote 203.0.113.10 1194", ovpn);
         Assert.DoesNotContain("{{", ovpn);
-        Assert.Equal(ClientConfigDirStore.ManagedHeader + "\nifconfig-push 10.50.28.201 255.255.255.0\n",
-            await File.ReadAllTextAsync(_dir.Combine("ccd", "db1")));
         Assert.Equal("0A1B2C", result.Certificate.SerialNumber);
         Assert.Matches("^[0-9a-f]{64}$", result.CertFingerprintSha256);
     }
 
     [Fact]
-    public async Task Issue_RegularProfile_IsUnchanged_NoPullFilter_NoCcd()
+    public async Task Issue_RegularProfile_IsUnchanged_NoPullFilter()
     {
-        var (service, _) = Create();
+        var service = Create();
 
         var result = await service.IssueOvpnFile(Request(), CancellationToken.None);
 
         Assert.DoesNotContain("pull-filter", await File.ReadAllTextAsync(result.Metadata.FilePath));
-        Assert.False(Directory.Exists(_dir.Combine("ccd")));
     }
 
-    [Fact]
-    public async Task Issue_CcdExclusive_WritesCcdForEveryProfile()
-    {
-        var (service, _) = Create(ccdExclusive: true);
-
-        await service.IssueOvpnFile(Request(), CancellationToken.None);
-
-        Assert.Equal(ClientConfigDirStore.ManagedHeader + "\n", await File.ReadAllTextAsync(_dir.Combine("ccd", "db1")));
-    }
-
-    [Fact]
-    public async Task Issue_StaticIpTakenByOtherCn_IsRejectedBeforeEasyRsa()
-    {
-        var (service, ccd) = Create();
-        await ccd.WriteAsync("db2", "10.50.28.201", CancellationToken.None);
-
-        var ex = await Assert.ThrowsAsync<LocalIssuanceValidationException>(() =>
-            service.IssueOvpnFile(Request(service: true, staticIp: "10.50.28.201"), CancellationToken.None));
-
-        Assert.True(ex.IsConflict);
-        _easyRsa.Verify(s => s.BuildCertificateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string>(), It.IsAny<int>()), Times.Never);
-        Assert.False(File.Exists(_dir.Combine("ccd", "db1")));
-    }
-
-    [Fact]
-    public async Task Issue_StaticIpWithoutCcd_IsRejected()
-    {
-        var (service, _) = Create(ccdEnabled: false);
-
-        await Assert.ThrowsAsync<LocalIssuanceValidationException>(() =>
-            service.IssueOvpnFile(Request(service: true, staticIp: "10.50.28.201"), CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task Revoke_RemovesCcdFile()
-    {
-        var (service, ccd) = Create();
-        await ccd.WriteAsync("db1", "10.50.28.201", CancellationToken.None);
-        _easyRsa.Setup(s => s.RevokeCertificateAsync(It.IsAny<string>(), "db1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ServerCertificate());
-
-        await service.RevokeOvpnFile(_dir.Combine("easy-rsa"), "db1", "db1.ovpn", _dir.Combine("none.ovpn"), CancellationToken.None);
-
-        Assert.Empty(ccd.ReadStaticAssignments());
-    }
 }

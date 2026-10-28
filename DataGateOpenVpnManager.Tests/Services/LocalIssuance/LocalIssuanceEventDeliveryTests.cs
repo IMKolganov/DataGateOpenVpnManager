@@ -35,7 +35,6 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
         SerialNumber = serial,
         CertFingerprintSha256 = new string('a', 64),
         IsServiceProfile = true,
-        StaticIp = "10.50.28.201",
         OccurredAt = DateTimeOffset.UtcNow,
     };
 
@@ -46,6 +45,21 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
             .Returns(() => new HttpClient(backend, disposeHandler: false) { BaseAddress = new Uri("http://backend.test/") });
         return new LocalIssuanceEventDeliveryService(factory.Object, outbox, _identity, TimeProvider.System,
             NullLogger<LocalIssuanceEventDeliveryService>.Instance);
+    }
+
+    [Fact]
+    public async Task ExistingOutboxJson_WithStaticIp_IsStillDelivered()
+    {
+        var outbox = NewOutbox();
+        await outbox.EnqueueAsync(Issued("0A01"), default);
+        var path = Assert.Single(outbox.ListPending()).Path;
+        var json = Newtonsoft.Json.Linq.JObject.Parse(await File.ReadAllTextAsync(path));
+        json["StaticIp"] = "10.50.28.201";
+        await File.WriteAllTextAsync(path, json.ToString());
+        var backend = new FakeBackend(HttpStatusCode.OK);
+        Assert.True(await NewDelivery(outbox, backend).DeliverPendingAsync(default));
+        Assert.Single(backend.Requests);
+        Assert.Empty(outbox.ListPending());
     }
 
     [Fact]
@@ -61,8 +75,8 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
         Assert.Equal("/api/open-vpn-servers/local-issuance-events", request.Path);
         Assert.Equal(_identity.Fingerprint, request.Headers[NodeRequestSignature.KeyIdHeader]);
         var evt = JsonConvert.DeserializeObject<LocalIssuanceEvent>(request.Body)!;
-        Assert.Equal(("issued", "local", "0A01", "db1", true, "10.50.28.201"),
-            (evt.EventType, evt.Origin, evt.SerialNumber, evt.CommonName, evt.IsServiceProfile, evt.StaticIp));
+        Assert.Equal(("issued", "local", "0A01", "db1", true),
+            (evt.EventType, evt.Origin, evt.SerialNumber, evt.CommonName, evt.IsServiceProfile));
 
         // Signature verifies with the public key the node announces.
         using var publicKey = ECDsa.Create();

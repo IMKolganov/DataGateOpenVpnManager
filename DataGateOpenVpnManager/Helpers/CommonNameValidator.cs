@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace DataGateOpenVpnManager.Helpers;
 
 /// <summary>
-/// CN rules for locally issued profiles. The CN becomes a file name (pki/issued, ovpn_files, ccd) and an
+/// CN rules for locally issued profiles. The CN becomes a file name (pki/issued, ovpn_files) and an
 /// easy-rsa argument, so only a conservative charset is allowed.
 /// </summary>
 public static partial class CommonNameValidator

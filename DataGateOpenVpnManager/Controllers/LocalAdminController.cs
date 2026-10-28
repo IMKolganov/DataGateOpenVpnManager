@@ -68,10 +68,10 @@ public class LocalAdminController(
     private static string FormatTable(IReadOnlyList<LocalProfileView> profiles)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"{"COMMON NAME",-32} {"ORIGIN",-9} {"STATUS",-8} {"SERVICE",-7} {"STATIC IP",-15} SERIAL");
+        sb.AppendLine($"{"COMMON NAME",-32} {"ORIGIN",-9} {"STATUS",-8} {"SERVICE",-7} SERIAL");
         foreach (var p in profiles)
             sb.AppendLine(
-                $"{p.CommonName,-32} {p.Origin,-9} {p.Status,-8} {(p.IsServiceProfile ? "yes" : "no"),-7} {p.StaticIp ?? "-",-15} {p.SerialNumber}");
+                $"{p.CommonName,-32} {p.Origin,-9} {p.Status,-8} {(p.IsServiceProfile ? "yes" : "no"),-7} {p.SerialNumber}");
         return sb.ToString();
     }
 }

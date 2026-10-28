@@ -21,8 +21,21 @@ public static class WebHostConfiguration
         if (localIssuance.Enabled)
             LocalAdminChannel.PrepareSocket(localIssuance);
 
+        var lookup = ServiceClientLookupOptions.FromConfiguration(builder.Configuration);
+        if (lookup.Enabled && lookup.Port is < 1 or > 65535)
+            throw new InvalidOperationException($"{ServiceClientLookupOptions.PortKey} must be between 1 and 65535.");
+
         builder.WebHost.ConfigureKestrel(options =>
         {
+            if (lookup.Enabled)
+            {
+                options.Listen(IPAddress.Loopback, lookup.Port, listen =>
+                {
+                    listen.Protocols = HttpProtocols.Http1;
+                    listen.Use(ServiceClientLookupChannel.MarkConnection);
+                });
+            }
+
             if (localIssuance.Enabled)
             {
                 // Node-local admin channel (root-only Unix socket); see LocalAdminChannel.

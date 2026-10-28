@@ -24,7 +24,6 @@ public class LocalProfileServiceTests : IDisposable
     private readonly List<ServerCertificate> _index = [];
     private readonly LocalProfileRegistry _registry;
     private readonly LocalIssuanceOptions _options;
-    private readonly ClientConfigDirStore _ccd;
     private OvpnIssueRequest? _lastIssue;
     private string _issuedSerial = "5E71A1";
 
@@ -32,8 +31,6 @@ public class LocalProfileServiceTests : IDisposable
     {
         _options = new LocalIssuanceOptions { Enabled = true, Directory = _dir.Combine("li") };
         _registry = new LocalProfileRegistry(_options);
-        _ccd = new ClientConfigDirStore(new LocalIssuanceOptions { ClientConfigDir = _dir.Combine("ccd") },
-            NullLogger<ClientConfigDirStore>.Instance);
         Directory.CreateDirectory(_dir.Combine("easy-rsa", "pki", "issued"));
 
         _easyRsa.Setup(e => e.GetAllCertificateInfoInIndexFileAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -81,7 +78,7 @@ public class LocalProfileServiceTests : IDisposable
     {
         var paths = new Mock<IEasyRsaPathResolver>();
         paths.Setup(p => p.GetEasyRsaPath()).Returns(_dir.Combine("easy-rsa"));
-        return new LocalProfileService(_options, _ovpn.Object, _easyRsa.Object, paths.Object, _registry, _outbox.Object, _ccd,
+        return new LocalProfileService(_options, _ovpn.Object, _easyRsa.Object, paths.Object, _registry, _outbox.Object,
             new ConfigurationBuilder().AddInMemoryCollection(config ?? new() { ["PUBLIC_IP"] = "203.0.113.10", ["PORT"] = "1295" }).Build(),
             TimeProvider.System, NullLogger<LocalProfileService>.Instance);
     }
@@ -90,17 +87,17 @@ public class LocalProfileServiceTests : IDisposable
     public async Task Create_ServiceProfile_UsesSharedPipeline_RecordsAndQueuesEvent()
     {
         var view = await Create().CreateAsync(
-            new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true, StaticIp = "10.50.28.201" },
+            new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true },
             CancellationToken.None);
 
         Assert.NotNull(_lastIssue);
         Assert.True(_lastIssue!.IsServiceProfile);
-        Assert.Equal(("10.50.28.201", "203.0.113.10", 1295, LocalProfileService.IssuedToLocalService),
-            (_lastIssue.StaticIp, _lastIssue.ServerIp, _lastIssue.ServerPort, _lastIssue.IssuedTo));
+        Assert.Equal(("203.0.113.10", 1295, LocalProfileService.IssuedToLocalService),
+            (_lastIssue.ServerIp, _lastIssue.ServerPort, _lastIssue.IssuedTo));
 
         var evt = Assert.Single(_events);
-        Assert.Equal((LocalIssuanceEventTypes.Issued, "local", "5E71A1", true, "10.50.28.201", new string('f', 64)),
-            (evt.EventType, evt.Origin, evt.SerialNumber, evt.IsServiceProfile, evt.StaticIp, evt.CertFingerprintSha256));
+        Assert.Equal((LocalIssuanceEventTypes.Issued, "local", "5E71A1", true, new string('f', 64)),
+            (evt.EventType, evt.Origin, evt.SerialNumber, evt.IsServiceProfile, evt.CertFingerprintSha256));
         Assert.Equal(("local", "active"), (view.Origin, view.Status));
         Assert.NotNull(_registry.FindActive("db1"));
     }
@@ -187,18 +184,16 @@ public class LocalProfileServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Revoke_AlreadyRevokedFromDashboard_RecordsIt_FreesStaticIp_WithoutTouchingPki()
+    public async Task Revoke_AlreadyRevokedFromDashboard_RecordsIt_WithoutTouchingPki()
     {
         var service = Create();
         await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true }, CancellationToken.None);
-        await _ccd.WriteAsync("db1", null, CancellationToken.None);
         IndexEntry("db1", "5E71A1", revoked: true);
 
         var view = await service.RevokeAsync("db1", CancellationToken.None);
 
         VerifyNeverRevokedInPki();
         Assert.Equal("revoked", view.Status);
-        Assert.False(File.Exists(_dir.Combine("ccd", "db1")));
         Assert.Equal(("revoked", "5E71A1"), (_events.Last().EventType, _events.Last().SerialNumber));
         Assert.Null(_registry.FindActive("db1"));
     }
@@ -212,12 +207,10 @@ public class LocalProfileServiceTests : IDisposable
         IndexEntry("router", "5E71A1", revoked: true);
         IndexEntry("router", "C0FFEE", revoked: false);
         WriteIssuedCert("router", "C0FFEE");
-        await _ccd.WriteAsync("router", null, CancellationToken.None);
 
         await service.RevokeAsync("router", CancellationToken.None);
 
         VerifyNeverRevokedInPki();
-        Assert.True(File.Exists(_dir.Combine("ccd", "router")));
         Assert.Equal(("revoked", "5E71A1"), (_events.Last().EventType, _events.Last().SerialNumber));
     }
 
@@ -276,7 +269,7 @@ public class LocalProfileServiceTests : IDisposable
     public async Task List_MarksOriginFromRegistry_AndStatusFromIndex()
     {
         var service = Create();
-        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true, StaticIp = "10.50.28.201" }, CancellationToken.None);
+        await service.CreateAsync(new LocalProfileCreateRequest { CommonName = "db1", IsServiceProfile = true }, CancellationToken.None);
         _index.Add(new ServerCertificate { CommonName = "db1", SerialNumber = "5E71A1", Status = CertificateStatus.Active });
         _index.Add(new ServerCertificate { CommonName = "alice", SerialNumber = "02", Status = CertificateStatus.Active });
         _index.Add(new ServerCertificate { CommonName = "server", SerialNumber = "00", Status = CertificateStatus.Active });
@@ -285,14 +278,14 @@ public class LocalProfileServiceTests : IDisposable
 
         Assert.Equal(["alice", "db1"], list.Select(p => p.CommonName));
         Assert.Equal(("dashboard", false), (list[0].Origin, list[0].IsServiceProfile));
-        Assert.Equal(("local", true, "10.50.28.201", "active"), (list[1].Origin, list[1].IsServiceProfile, list[1].StaticIp, list[1].Status));
+        Assert.Equal(("local", true, "active"), (list[1].Origin, list[1].IsServiceProfile, list[1].Status));
     }
 
     [Fact]
     public async Task Disabled_RefusesEverything()
     {
         var disabled = new LocalProfileService(new LocalIssuanceOptions { Enabled = false, Directory = _dir.Combine("off") },
-            _ovpn.Object, _easyRsa.Object, Mock.Of<IEasyRsaPathResolver>(), _registry, _outbox.Object, _ccd,
+            _ovpn.Object, _easyRsa.Object, Mock.Of<IEasyRsaPathResolver>(), _registry, _outbox.Object,
             new ConfigurationBuilder().Build(), TimeProvider.System, NullLogger<LocalProfileService>.Instance);
 
         await Assert.ThrowsAsync<LocalIssuanceValidationException>(() =>

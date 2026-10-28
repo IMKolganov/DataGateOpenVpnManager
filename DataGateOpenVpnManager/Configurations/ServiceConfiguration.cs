@@ -97,26 +97,26 @@ public static class ServiceConfiguration
     }
 
     /// <summary>
-    /// ccd store is always present (CLIENT_CONFIG_DIR off = no-op). Node key, registry, outbox and the
-    /// delivery worker exist only with LOCAL_ISSUANCE_ENABLED=true.
+    /// Node key, registry, outbox and delivery worker exist only with LOCAL_ISSUANCE_ENABLED=true.
     /// </summary>
     public static void ConfigureLocalIssuance(this IServiceCollection services, IConfiguration config)
     {
         var options = LocalIssuanceOptions.FromConfiguration(config);
         services.AddSingleton(options);
-        // Live client addresses come from the management interface, wired by ConfigureSignalR (absent when
-        // ConfigureServices is composed alone, e.g. in tests): then static IPs are checked against files only.
-        services.AddSingleton<IClientConfigDirStore>(sp => new ClientConfigDirStore(
-            sp.GetRequiredService<LocalIssuanceOptions>(),
-            sp.GetRequiredService<ILogger<ClientConfigDirStore>>(),
-            sp.GetService<OpenVpnManagementSignalService>() is null ? null : sp.GetService<IOpenVpnManagementStatusCache>()));
         services.TryAddSingleton(TimeProvider.System);
+        var lookup = ServiceClientLookupOptions.FromConfiguration(config);
+        services.AddSingleton(lookup);
+        if (lookup.Enabled)
+        {
+            services.AddSingleton<ILocalProfileRegistry, LocalProfileRegistry>();
+            services.AddScoped<IServiceClientLookup, ServiceClientLookup>();
+        }
 
         if (!options.Enabled)
             return;
 
         services.AddSingleton<INodeIdentity, NodeIdentity>();
-        services.AddSingleton<ILocalProfileRegistry, LocalProfileRegistry>();
+        services.TryAddSingleton<ILocalProfileRegistry, LocalProfileRegistry>();
         services.AddSingleton<ILocalIssuanceOutbox, LocalIssuanceOutbox>();
         services.AddScoped<ILocalProfileService, LocalProfileService>();
 

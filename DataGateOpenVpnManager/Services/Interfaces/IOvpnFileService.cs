@@ -7,7 +7,7 @@ namespace DataGateOpenVpnManager.Services.Interfaces;
 public interface IOvpnFileService
 {
     /// <summary>
-    /// Single issuance pipeline (easy-rsa + template + optional service profile / ccd) shared by the
+    /// Single issuance pipeline (easy-rsa + template + optional service profile) shared by the
     /// dashboard API and the node-local admin channel.
     /// </summary>
     Task<OvpnIssueResult> IssueOvpnFile(OvpnIssueRequest request, CancellationToken cancellationToken);
@@ -37,9 +37,6 @@ public sealed class OvpnIssueRequest
 
     /// <summary>Only VPN-internal traffic goes through the tunnel (pull-filter for gateway/DNS pushes).</summary>
     public bool IsServiceProfile { get; init; }
-
-    /// <summary>Permanent tunnel address via ccd ifconfig-push; requires CLIENT_CONFIG_DIR.</summary>
-    public string? StaticIp { get; init; }
 }
 
 public sealed record OvpnIssueResult(

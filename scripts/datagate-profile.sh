@@ -1,7 +1,7 @@
 #!/bin/bash
 # Node-local OpenVPN profile issuance (LOCAL_ISSUANCE_ENABLED=true). Talks to DataGateOpenVpnManager over its
 # root-only admin Unix socket; run inside the container:
-#   docker exec <container> datagate-profile create upcloud-db1 --service --static-ip 10.50.28.201 > db1.ovpn
+#   docker exec <container> datagate-profile create upcloud-db1 --service > db1.ovpn
 set -euo pipefail
 
 SOCK="${LOCAL_ADMIN_SOCKET:-${LOCAL_ISSUANCE_DIR:-${DATA_DIR:-/mnt}/local-issuance}/admin.sock}"
@@ -10,10 +10,9 @@ BASE="http://localhost/api/local-admin"
 usage() {
   cat >&2 <<USAGE
 Usage:
-  datagate-profile create <CN> [--service] [--static-ip IP] [--remote HOST] [--port N] [--days N] [-o FILE]
+  datagate-profile create <CN> [--service] [--remote HOST] [--port N] [--days N] [-o FILE]
       Issue a profile and print the .ovpn to stdout (or write it to FILE, mode 0600).
       --service    only VPN-internal traffic in the tunnel (pull-filter redirect-gateway/dhcp-option/block-outside-dns)
-      --static-ip  permanent tunnel address (needs CLIENT_CONFIG_DIR on the node)
   datagate-profile get <CN> [-o FILE]     Print the .ovpn of an active locally issued profile.
   datagate-profile revoke <CN>            Revoke a locally issued profile.
   datagate-profile list [--json]          All certificates on this node with origin (local/dashboard).
@@ -70,23 +69,21 @@ case "$cmd" in
   create)
     [ $# -ge 1 ] || usage
     cn="$1"; shift
-    service=false; static_ip=""; remote=""; port=""; days=""; file=""
+    service=false; remote=""; port=""; days=""; file=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --service) service=true ;;
-        --static-ip) static_ip="${2:?}"; shift ;;
         --remote) remote="${2:?}"; shift ;;
         --port) port="${2:?}"; shift ;;
         --days) days="${2:?}"; shift ;;
         -o|--output) file="${2:?}"; shift ;;
-        *) usage ;;
+        *) die "unknown option: $1" ;;
       esac
       shift
     done
     [[ -z "$port" || "$port" =~ ^[0-9]+$ ]] || die "--port must be a number"
     [[ -z "$days" || "$days" =~ ^[0-9]+$ ]] || die "--days must be a number"
     body="{\"CommonName\":$(json_string "$cn"),\"IsServiceProfile\":$service"
-    [ -n "$static_ip" ] && body+=",\"StaticIp\":$(json_string "$static_ip")"
     [ -n "$remote" ] && body+=",\"Remote\":$(json_string "$remote")"
     [ -n "$port" ] && body+=",\"Port\":$port"
     [ -n "$days" ] && body+=",\"ExpireDays\":$days"

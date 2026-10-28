@@ -43,6 +43,17 @@ public class DatagateProfileScriptTests
         OperatingSystem.IsLinux() && File.Exists("/usr/bin/curl") && File.Exists("/bin/bash");
 
     [Fact]
+    public async Task Create_StaticIpIsAnUnknownOption()
+    {
+        if (!CanRun())
+            return;
+        var (code, stdout, stderr) = await RunAsync("/tmp/no-admin.sock", "create", "db1", "--static-ip", "10.50.28.201");
+        Assert.NotEqual(0, code);
+        Assert.Empty(stdout);
+        Assert.Contains("unknown option: --static-ip", stderr);
+    }
+
+    [Fact]
     public async Task Get_WhenNodeRefuses_FailsWithoutWritingAFile()
     {
         if (!CanRun())

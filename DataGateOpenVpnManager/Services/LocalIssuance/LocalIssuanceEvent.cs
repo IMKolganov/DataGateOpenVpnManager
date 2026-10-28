@@ -19,7 +19,6 @@ public sealed class LocalIssuanceEvent
     public string SerialNumber { get; set; } = string.Empty;
     public string CertFingerprintSha256 { get; set; } = string.Empty;
     public bool IsServiceProfile { get; set; }
-    public string? StaticIp { get; set; }
     public DateTimeOffset OccurredAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public string IssuedTo { get; set; } = string.Empty;

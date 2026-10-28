@@ -11,7 +11,6 @@ public sealed class LocalProfileCreateRequest
 {
     public string CommonName { get; set; } = string.Empty;
     public bool IsServiceProfile { get; set; }
-    public string? StaticIp { get; set; }
 
     /// <summary>Host clients dial; defaults to PUBLIC_IP.</summary>
     public string? Remote { get; set; }
@@ -30,7 +29,6 @@ public sealed class LocalProfileView
     public string SerialNumber { get; set; } = string.Empty;
     public string? CertFingerprintSha256 { get; set; }
     public bool IsServiceProfile { get; set; }
-    public string? StaticIp { get; set; }
     public DateTimeOffset? IssuedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
@@ -55,7 +53,6 @@ public sealed partial class LocalProfileService(
     IEasyRsaPathResolver easyRsaPathResolver,
     ILocalProfileRegistry registry,
     ILocalIssuanceOutbox outbox,
-    IClientConfigDirStore clientConfigDirStore,
     IConfiguration configuration,
     TimeProvider timeProvider,
     ILogger<LocalProfileService> logger) : ILocalProfileService
@@ -128,7 +125,6 @@ public sealed partial class LocalProfileService(
             IssuedTo = request.IsServiceProfile ? IssuedToLocalService : IssuedToLocalAdmin,
             CertExpireDays = expireDays,
             IsServiceProfile = request.IsServiceProfile,
-            StaticIp = request.StaticIp,
         }, cancellationToken);
 
         var now = timeProvider.GetUtcNow();
@@ -138,7 +134,6 @@ public sealed partial class LocalProfileService(
             SerialNumber = result.Certificate.SerialNumber,
             CertFingerprintSha256 = result.CertFingerprintSha256,
             IsServiceProfile = request.IsServiceProfile,
-            StaticIp = string.IsNullOrWhiteSpace(request.StaticIp) ? null : request.StaticIp.Trim(),
             IssuedAt = now,
             ExpiresAt = result.Certificate.ExpiryDate == default ? null : result.Certificate.ExpiryDate,
             IssuedTo = result.Metadata.IssuedTo,
@@ -151,8 +146,8 @@ public sealed partial class LocalProfileService(
         await outbox.EnqueueAsync(ToEvent(record, LocalIssuanceEventTypes.Issued, now), cancellationToken);
 
         logger.LogInformation(
-            "Locally issued {CommonName} (serial {Serial}, service={IsService}, static IP {StaticIp}).",
-            commonName, record.SerialNumber, record.IsServiceProfile, record.StaticIp ?? "-");
+            "Locally issued {CommonName} (serial {Serial}, service={IsService}).",
+            commonName, record.SerialNumber, record.IsServiceProfile);
         return ToView(record, "active");
     }
 
@@ -172,9 +167,6 @@ public sealed partial class LocalProfileService(
             // Revoked elsewhere (the dashboard, or a crash before the registry write): record it, leave the PKI alone.
             logger.LogWarning("{CommonName} (serial {Serial}) is already revoked in index.txt; recording it.",
                 commonName, record.SerialNumber);
-            // ccd files are per CN: keep it when a newer valid certificate already owns this CN.
-            if (!certificates.Any(c => string.Equals(c.CommonName, commonName, StringComparison.Ordinal) && IsActive(c)))
-                clientConfigDirStore.Remove(commonName);
         }
         else
         {
@@ -304,7 +296,6 @@ public sealed partial class LocalProfileService(
         SerialNumber = record.SerialNumber,
         CertFingerprintSha256 = record.CertFingerprintSha256,
         IsServiceProfile = record.IsServiceProfile,
-        StaticIp = record.StaticIp,
         IssuedAt = record.IssuedAt,
         ExpiresAt = record.ExpiresAt,
         RevokedAt = record.RevokedAt,
@@ -317,7 +308,6 @@ public sealed partial class LocalProfileService(
         SerialNumber = record.SerialNumber,
         CertFingerprintSha256 = record.CertFingerprintSha256,
         IsServiceProfile = record.IsServiceProfile,
-        StaticIp = record.StaticIp,
         OccurredAt = now,
         ExpiresAt = record.ExpiresAt,
         IssuedTo = record.IssuedTo,

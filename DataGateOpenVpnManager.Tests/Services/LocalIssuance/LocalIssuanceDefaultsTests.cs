@@ -15,7 +15,7 @@ using Newtonsoft.Json.Linq;
 
 namespace DataGateOpenVpnManager.Tests.Services.LocalIssuance;
 
-/// <summary>Without LOCAL_ISSUANCE_ENABLED / CLIENT_CONFIG_DIR an existing node behaves exactly as before.</summary>
+/// <summary>Without LOCAL_ISSUANCE_ENABLED an existing node behaves exactly as before.</summary>
 public class LocalIssuanceDefaultsTests
 {
     private static IConfiguration Config(Dictionary<string, string?> values) =>
@@ -27,32 +27,7 @@ public class LocalIssuanceDefaultsTests
         var options = LocalIssuanceOptions.FromConfiguration(Config(new() { ["DATA_DIR"] = "/openvpn-udp" }));
 
         Assert.False(options.Enabled);
-        Assert.Null(options.ClientConfigDir);
-        Assert.False(options.CcdExclusive);
         Assert.Equal("/openvpn-udp/local-issuance/admin.sock", options.SocketPath);
-    }
-
-    [Theory]
-    [InlineData("true", "/openvpn-udp/ccd")]
-    [InlineData("1", "/openvpn-udp/ccd")]
-    [InlineData("/srv/ccd/", "/srv/ccd")]
-    [InlineData("", null)]
-    public void ClientConfigDir_ResolvesLikeServerConfScript(string raw, string? expected)
-    {
-        Assert.Equal(expected, LocalIssuanceOptions.ResolveClientConfigDir(raw, "/openvpn-udp"));
-    }
-
-    [Theory]
-    [InlineData(null, false, "255.255.255.0", 0)] // no ccd: server.conf untouched
-    [InlineData(null, true, "255.255.255.0", 32)]
-    [InlineData("0", true, "255.255.255.0", 0)]
-    [InlineData("54", true, "255.255.255.0", 54)]
-    [InlineData(null, true, "255.255.255.240", 0)] // /28 pool has 13 addresses: 32 would leave none
-    [InlineData("-1", true, "255.255.255.0", 0)]
-    [InlineData("abc", true, "255.255.255.0", 0)]
-    public void StaticIpReserved_ResolvesLikeServerConfScript(string? raw, bool ccd, string netmask, int expected)
-    {
-        Assert.Equal(expected, LocalIssuanceOptions.ResolveStaticIpReserved(raw, ccd, "10.50.28.0", netmask));
     }
 
     [Fact]
@@ -66,7 +41,6 @@ public class LocalIssuanceDefaultsTests
         Assert.Null(provider.GetService<INodeIdentity>());
         Assert.Null(provider.GetService<ILocalIssuanceOutbox>());
         Assert.DoesNotContain(services, d => d.ImplementationType == typeof(LocalIssuanceEventDeliveryService));
-        Assert.False(provider.GetRequiredService<IClientConfigDirStore>().IsEnabled);
     }
 
     [Fact]

@@ -9,7 +9,6 @@ public sealed class LocalProfileRecord
     public string SerialNumber { get; set; } = string.Empty;
     public string CertFingerprintSha256 { get; set; } = string.Empty;
     public bool IsServiceProfile { get; set; }
-    public string? StaticIp { get; set; }
     public DateTimeOffset IssuedAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }

@@ -55,6 +55,17 @@ public class JwtValidationMiddleware(RequestDelegate next)
         var token = ExtractToken(context);
         var requestContext = context.ToJwtValidationRequestContext();
 
+        // This read-only listener has no JWT surface and exposes no other routes.
+        if (ServiceClientLookupChannel.IsLookupPath(requestPath)
+            || ServiceClientLookupChannel.IsLookupConnection(context))
+        {
+            if (ServiceClientLookupChannel.IsLookupPath(requestPath) && ServiceClientLookupChannel.IsAllowed(context))
+                await next(context);
+            else
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
         // Node-local admin channel: only over the admin Unix socket; elsewhere it does not exist (no JWT, no loopback).
         if (LocalAdminChannel.IsLocalAdminPath(requestPath))
         {

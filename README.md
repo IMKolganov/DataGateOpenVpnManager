@@ -223,31 +223,24 @@ Wazuh rule **100913** should match `[OpenVpnTlsAppClient]` instead of the raw `T
 
 Issue profiles **on the node itself** (no dashboard request) — e.g. a home hub handing service profiles to
 servers that must reach a host inside the VPN at boot. The node reports every local issue/revoke to the
-backend, so the dashboard lists them (labels *Issued locally* / *Service*, static IP) and can revoke them.
+backend, so the dashboard lists them (labels *Issued locally* / *Service*) and can revoke them.
 
 All of it is **off by default**; a node without these variables renders the same `server.conf` as before.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `LOCAL_ISSUANCE_ENABLED` | `false` | Admin socket, node key, event outbox + delivery to the backend. |
-| `CLIENT_CONFIG_DIR` | empty (off) | Adds `client-config-dir`; `true` = `$DATA_DIR/ccd`, or an absolute path. Needed for `--static-ip`. |
-| `CCD_EXCLUSIVE` | `false` | Adds `ccd-exclusive` (only CNs with a ccd file connect; every issued profile then gets one). |
-| `STATIC_IP_RESERVED` | `32` (with ccd) | Top addresses of `VPN_SUBNET` kept out of the dynamic pool for static IPs: `server … nopool` + `ifconfig-pool` (e.g. /24 → pool `.2-.222`, static `.223-.254`). `0` = off. |
 | `LOCAL_ISSUANCE_DIR` | `$DATA_DIR/local-issuance` | Private dir (0700): `admin.sock`, `node-identity.key`, `outbox/`, `profiles.json`, optional `client-template.ovpn`. |
 
 ```bash
-docker exec openvpn-udp datagate-profile create upcloud-db1 --service --static-ip 10.50.28.201 > upcloud-db1.ovpn
+docker exec openvpn-udp datagate-profile create upcloud-db1 --service > upcloud-db1.ovpn
 docker exec openvpn-udp datagate-profile list
 docker exec openvpn-udp datagate-profile revoke upcloud-db1
 docker exec openvpn-udp datagate-profile node-id     # key fingerprint to compare in the dashboard
 ```
 
 * `--service` adds `pull-filter ignore "redirect-gateway" | "dhcp-option" | "block-outside-dns"`: only VPN-internal
-  traffic uses the tunnel. `--static-ip` writes `ifconfig-push <ip> <netmask>` to ccd (must be inside `VPN_SUBNET`,
-  not network/broadcast/server address, not used by another CN in ccd, `ipp.txt` or by a client connected right
-  now per the management interface) and, with `STATIC_IP_RESERVED`, must lie in the reserved top range. OpenVPN's
-  pool does not skip `ifconfig-push` addresses ([Concepts-Addressing](https://community.openvpn.net/openvpn/wiki/Concepts-Addressing)),
-  so a static IP inside the pool can later be handed to a dynamic client; the reservation makes that impossible.
+  traffic uses the tunnel.
 * `revoke`/`get` go by serial number, not CN (easy-rsa allows the same CN several times in `index.txt`): a profile
   already revoked from the dashboard is only recorded, and if the CN was re-issued since, the newer certificate
   is never touched.
@@ -261,6 +254,75 @@ docker exec openvpn-udp datagate-profile node-id     # key fingerprint to compar
   `POST /api/open-vpn-servers/{id}/node-key/trust {"fingerprint": "..."}` after comparing with `node-id`.
 * **Delivery:** events are fsync'ed to `outbox/` and retried with backoff until the backend acknowledges them;
   container restarts lose nothing, and the backend is idempotent by certificate serial.
+
+### Service hub: VPN address to certificate CN
+
+Enable `SERVICE_CLIENT_LOOKUP=true` **only on the service hub**, sharing its Docker network namespace
+with tang-gate (for example the gateway uses `network_mode: service:openvpn`). Leave it unset on ordinary
+nodes, especially `network_mode: host` nodes. It creates a separate HTTP listener at `127.0.0.1:5012`
+(`SERVICE_CLIENT_LOOKUP_PORT` overrides the port); do not publish/proxy this port. No JWT is required.
+The public API listener always returns 404 for this route, including requests proxied by local nginx.
+
+`GET http://127.0.0.1:5012/api/local/service-clients/by-virtual-ip/10.50.28.2`
+returns 200 with `{commonName, serial, virtualAddress, realAddress, connectedSince}` (UTC ISO time), or 404.
+Only active `IsServiceProfile` records in the local registry qualify; user profiles never appear.
+No client-list endpoint is exposed. The lookup only reads management, registry, index and CRL.
+
+Every lookup awaits a fresh local management `status 3`, then checks the registry, index and CRL. It does
+not use `openvpn-status.log` or add/accelerate a background poll. Existing management refresh settings
+(`OpenVpnProxy__ManagementStatusRefreshSeconds`) and the backend's synchronization interval stay unchanged.
+The lookup sends no status snapshots to the backend and adds no database records.
+
+After OpenVPN removes a session, the next successful lookup returns 404 without a stale-cache grace
+period. OpenVPN must detect/process the disconnect first: abrupt network loss follows its existing
+keepalive settings (`keepalive 15 120` by default). CRL/index revocation is checked on every request,
+including when the VPN session is still present. A session predating a reissued CN and ambiguous
+certificate identities are hidden. Lookup work has a **2-second timeout**; this is a limit, not a measured
+latency. Unavailable management, stale/invalid status or unreadable PKI/CRL produce 404.
+
+Measured on 2026-10-29 using an isolated local OpenVPN 2.7.6 hub with two connected clients (service and
+user): 30 successful HTTP lookups had **median 43.4 ms, p95 44.4 ms, range 42.5–49.5 ms**; the first lookup
+took 18.2 ms. The first lookup after server-side disconnect took 43.3 ms (404), after revoke 42.4 ms (404),
+and with only the CRL marking the still-connected certificate revoked 43.2 ms (404). These are curl
+`time_total` measurements inside the hub, excluding Docker CLI startup. The disconnect test waited for
+OpenVPN's client-removal event; stopping the test client and observing removal took 5.2 seconds including
+Docker stop/inspection overhead. These measurements describe this local fixture, not a production SLA.
+
+Existing outbox events containing the retired `StaticIp` field remain deliverable: the backend ignores
+unknown event fields. The applied issuance migration is preserved; a subsequent migration drops the column.
+
+### Reproducing the integration checks
+
+The Docker check is part of `DataGateOpenVpnManager.Tests` and is skipped unless
+`DATAGATE_LOOKUP_TEST_IMAGE` names an image built from the current checkout. It requires Linux, Docker
+and `/dev/net/tun`. It starts fresh nodes and real VPN clients on an internal Docker network, uses a
+disposable auth-response stub instead of a real backend, and removes its containers, keys and network.
+It checks the actual configuration with lookup absent/enabled, the private port, shared/separate network
+namespaces, service/user filtering, disconnect, revoke and CRL-only revoke with live VPN sessions.
+It also removes `ta.key` temporarily and verifies that lookup neither needs nor regenerates that key.
+
+```bash
+docker build -t datagate-lookup-test .
+DATAGATE_LOOKUP_TEST_IMAGE=datagate-lookup-test \
+  dotnet test DataGateOpenVpnManager.Tests/DataGateOpenVpnManager.Tests.csproj \
+  --filter FullyQualifiedName~ServiceClientLookupDockerIntegrationTests
+```
+
+Set `DATAGATE_LOOKUP_TEST_REPORT` to a local JSON file path to save timing results. No background interval
+override is needed for this test because each lookup requests current management data.
+
+The backend's `RemoveLocalProfileStaticIpPostgresTests` is enabled by
+`DATAGATE_MIGRATION_TEST_PG_CONNECTION`, pointing to a disposable PostgreSQL server with permission to
+create databases. It creates its own database, executes EF-generated upgrade, downgrade and upgrade SQL,
+checks that both profile records survive and the column changes as expected, then drops that database.
+This checks the incremental DropColumn against a representative existing table, not the full historical
+fresh-database migration chain. No existing dev or production database is migrated by this check.
+
+```bash
+DATAGATE_MIGRATION_TEST_PG_CONNECTION='Host=127.0.0.1;Port=55432;Database=postgres;Username=postgres' \
+  dotnet test ../backend/DataGateMonitor.Tests/DataGateMonitor.Tests.csproj \
+  --filter FullyQualifiedName~RemoveLocalProfileStaticIpPostgresTests
+```
 
 ## ⚠ Notes
 

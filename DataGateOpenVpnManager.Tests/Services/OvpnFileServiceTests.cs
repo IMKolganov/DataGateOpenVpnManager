@@ -27,10 +27,9 @@ public class OvpnFileServiceTests
         _issuanceTrackerMock.Setup(t => t.Begin(It.IsAny<string>())).Returns(lease.Object);
     }
 
-    private OvpnFileService CreateService(IConfiguration? configuration = null, IClientConfigDirStore? ccd = null) =>
+    private OvpnFileService CreateService(IConfiguration? configuration = null) =>
         new(_loggerMock.Object, _easyRsaMock.Object, _options, _issuanceTrackerMock.Object,
-            configuration ?? new ConfigurationBuilder().AddInMemoryCollection().Build(),
-            ccd ?? new ClientConfigDirStore(new LocalIssuanceOptions(), NullLogger<ClientConfigDirStore>.Instance));
+            configuration ?? new ConfigurationBuilder().AddInMemoryCollection().Build());
 
     [Fact]
     public async Task RevokeOvpnFile_WhenFileExists_MovesFileAndReturnsMetadata()

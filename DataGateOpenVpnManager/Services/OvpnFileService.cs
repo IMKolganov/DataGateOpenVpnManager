@@ -2,7 +2,6 @@
 using DataGateOpenVpnManager.Models;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
-using DataGateOpenVpnManager.Services.LocalIssuance;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.OvpnFile.Responses;
 using Microsoft.Extensions.Options;
 
@@ -13,8 +12,7 @@ public class OvpnFileService(
     IEasyRsaService easyRsaService,
     IOptions<EasyRsaOptions> options,
     IOvpnIssuanceTracker issuanceTracker,
-    IConfiguration configuration,
-    IClientConfigDirStore clientConfigDirStore)
+    IConfiguration configuration)
     : IOvpnFileService
 {
     public async Task<OvpnFileMetadata> AddOvpnFile(string easyRsaPath, string commonName, string friendlyΝame,
@@ -40,14 +38,6 @@ public class OvpnFileService(
     {
         var easyRsaPath = Path.GetFullPath(request.EasyRsaPath);
         var commonName = request.CommonName;
-        var staticIp = string.IsNullOrWhiteSpace(request.StaticIp) ? null : request.StaticIp.Trim();
-        var writesCcd = staticIp is not null || clientConfigDirStore.IsExclusive;
-
-        // Hold the ccd gate from IP validation until the file is written (no double assignment).
-        await using var ccdLease = writesCcd ? await clientConfigDirStore.AcquireAsync(cancellationToken) : null;
-        if (staticIp is not null)
-            await clientConfigDirStore.ValidateStaticIpAsync(commonName, staticIp, cancellationToken);
-
         await using var issuance = issuanceTracker.Begin(commonName);
         try
         {
@@ -107,9 +97,6 @@ public class OvpnFileService(
                 KeyFilePath = certResult.KeyPath,
             };
 
-            if (writesCcd)
-                await clientConfigDirStore.WriteAsync(commonName, staticIp, cancellationToken);
-
             issuance.MarkCompleted();
             return new OvpnIssueResult(issuedOvpnFile, certResult, CertificateFingerprint.TrySha256Hex(clientCertContent));
         }
@@ -131,7 +118,6 @@ public class OvpnFileService(
                                "for CertName: {CommonName}", serverCertificate.Message, commonName);
         string revokedFilePath = MoveRevokedOvpnFile(ovpnFileName, ovpnFilePath, easyRsaPath);
         logger.LogInformation("Successfully moved revoked .ovpn file to: {RevokedFilePath}", revokedFilePath);
-        RemoveClientConfig(commonName);
 
         logger.LogInformation("Updated database for revoked certificate: {CommonName}, " +
                                "External ID: {ExternalId}", commonName, 0);
@@ -178,19 +164,6 @@ public class OvpnFileService(
         }
     }
     
-    // A revoked CN must not keep its pinned address; never fail the revoke over it.
-    private void RemoveClientConfig(string commonName)
-    {
-        try
-        {
-            clientConfigDirStore.Remove(commonName);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not remove ccd file for revoked {CommonName}", commonName);
-        }
-    }
-
     private string MoveRevokedOvpnFile(string ovpnFileName, string ovpnFilePath, string easyRsaPath)
     {
         var revokedOvpnFilesDirPath = Path.Combine(easyRsaPath, "pki", "revoked", "ovpn_files");

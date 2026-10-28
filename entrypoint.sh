@@ -206,16 +206,8 @@ else
   DEV_LINES="dev tun"
 fi
 
-# Body lives in scripts/server-conf.sh (shared with tests); optional CLIENT_CONFIG_DIR / CCD_EXCLUSIVE.
+# Body lives in scripts/server-conf.sh (shared with tests).
 . "$SCRIPT_SOURCE/server-conf.sh"
-CCD_DIR="$(resolve_client_config_dir)"
-if [ -n "$CCD_DIR" ]; then
-  mkdir -p "$CCD_DIR"
-  # OpenVPN reads ccd files after dropping to nobody.
-  chmod 755 "$CCD_DIR"
-  export CLIENT_CONFIG_DIR="$CCD_DIR"
-  echo "[entrypoint] client-config-dir=$CCD_DIR ccd-exclusive=${CCD_EXCLUSIVE:-false}"
-fi
 render_server_conf > "$DATA_DIR/server.conf"
 
 # Prepare log files
