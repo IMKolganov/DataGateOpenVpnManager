@@ -7,7 +7,6 @@ using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.Interfaces;
 using DataGateOpenVpnManager.Services.LocalIssuance;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace DataGateOpenVpnManager.Services;
 
@@ -149,12 +148,10 @@ public sealed class VpnServerAnnounceHostedService(
 
     internal string BuildAnnounceJson(AnnounceVpnServerRequest request)
     {
-        if (!localIssuanceOptions.Enabled)
-            return JsonConvert.SerializeObject(request);
-
-        var payload = JObject.FromObject(request);
-        payload[NodePublicKeyField] = services.GetRequiredService<INodeIdentity>().PublicKeyPem;
-        return payload.ToString(Formatting.None);
+        request.NodePublicKeyPem = localIssuanceOptions.Enabled
+            ? services.GetRequiredService<INodeIdentity>().PublicKeyPem
+            : null;
+        return JsonConvert.SerializeObject(request);
     }
 
     private static string ResolveSuggestedName()

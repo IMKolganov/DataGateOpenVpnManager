@@ -1,3 +1,4 @@
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Responses;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using DataGateMonitor.SharedModels.Enums;
@@ -7,9 +8,6 @@ using DataGateOpenVpnManager.Services.Interfaces;
 using DataGateOpenVpnManager.Services.Proxy;
 
 namespace DataGateOpenVpnManager.Services.LocalIssuance;
-
-public sealed record ServiceClientView(string CommonName, string Serial, string VirtualAddress,
-    string RealAddress, DateTimeOffset ConnectedSince);
 
 public interface IServiceClientLookup
 {
@@ -71,7 +69,11 @@ public sealed class ServiceClientLookup(
             var serial = CertificateSerial.Normalize(record.SerialNumber);
             if (serial.Length % 2 != 0)
                 serial = "0" + serial;
-            if (crl.RemoveEntry(Convert.FromHexString(serial)))
+            var serialBytes = Convert.FromHexString(serial);
+            // CRL entries retain DER INTEGER's sign byte; EasyRSA's hex serial is unsigned.
+            if (serialBytes.Length > 0 && (serialBytes[0] & 0x80) != 0)
+                serialBytes = [0, .. serialBytes];
+            if (crl.RemoveEntry(serialBytes))
                 return null;
 
             timeout.Token.ThrowIfCancellationRequested();

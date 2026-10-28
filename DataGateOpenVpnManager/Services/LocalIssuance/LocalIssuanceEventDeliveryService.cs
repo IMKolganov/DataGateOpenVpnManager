@@ -1,3 +1,4 @@
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance.Requests;
 using System.Net;
 using System.Text;
 using Newtonsoft.Json;
@@ -88,7 +89,7 @@ public sealed class LocalIssuanceEventDeliveryService(
         return true;
     }
 
-    private async Task<DeliveryOutcome> SendAsync(LocalIssuanceEvent evt, CancellationToken cancellationToken)
+    private async Task<DeliveryOutcome> SendAsync(LocalIssuanceEventRequest evt, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(HttpClientName);
         var body = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(evt));

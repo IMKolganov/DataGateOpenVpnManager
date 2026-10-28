@@ -1,14 +1,15 @@
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance.Requests;
 using Newtonsoft.Json;
 
 namespace DataGateOpenVpnManager.Services.LocalIssuance;
 
 /// <summary>
-/// Durable FIFO of <see cref="LocalIssuanceEvent"/> on the node's data volume: one fsync'ed JSON file per event,
+/// Durable FIFO of <see cref="LocalIssuanceEventRequest"/> on the node's data volume: one fsync'ed JSON file per event,
 /// deleted only after the backend acknowledged it, so container restarts and backend outages lose nothing.
 /// </summary>
 public interface ILocalIssuanceOutbox
 {
-    Task EnqueueAsync(LocalIssuanceEvent evt, CancellationToken cancellationToken);
+    Task EnqueueAsync(LocalIssuanceEventRequest evt, CancellationToken cancellationToken);
 
     /// <summary>Pending events, oldest first.</summary>
     IReadOnlyList<LocalIssuanceOutboxItem> ListPending();
@@ -22,7 +23,7 @@ public interface ILocalIssuanceOutbox
     Task WaitForEnqueueAsync(TimeSpan timeout, CancellationToken cancellationToken);
 }
 
-public sealed record LocalIssuanceOutboxItem(string Path, LocalIssuanceEvent Event);
+public sealed record LocalIssuanceOutboxItem(string Path, LocalIssuanceEventRequest Event);
 
 public sealed class LocalIssuanceOutbox(LocalIssuanceOptions options, ILogger<LocalIssuanceOutbox> logger)
     : ILocalIssuanceOutbox
@@ -30,7 +31,7 @@ public sealed class LocalIssuanceOutbox(LocalIssuanceOptions options, ILogger<Lo
     private readonly SemaphoreSlim _signal = new(0, int.MaxValue);
     private readonly object _sync = new();
 
-    public Task EnqueueAsync(LocalIssuanceEvent evt, CancellationToken cancellationToken)
+    public Task EnqueueAsync(LocalIssuanceEventRequest evt, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(SafeSerial(evt.SerialNumber)))
@@ -67,7 +68,7 @@ public sealed class LocalIssuanceOutbox(LocalIssuanceOptions options, ILogger<Lo
         {
             try
             {
-                var evt = JsonConvert.DeserializeObject<LocalIssuanceEvent>(File.ReadAllText(path));
+                var evt = JsonConvert.DeserializeObject<LocalIssuanceEventRequest>(File.ReadAllText(path));
                 if (evt is not null)
                     items.Add(new LocalIssuanceOutboxItem(path, evt));
             }

@@ -1,3 +1,4 @@
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Responses;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
@@ -43,7 +44,7 @@ public class ServiceClientLookupTests : IDisposable
 
     public void Dispose() => _dir.Dispose();
 
-    private void WriteCrl(bool revoked = false)
+    private void WriteCrl(bool revoked = false, string crlSerial = "5E71A1")
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest("CN=test-ca", key, HashAlgorithmName.SHA256);
@@ -53,10 +54,24 @@ public class ServiceClientLookupTests : IDisposable
         using var ca = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
         var crl = new CertificateRevocationListBuilder();
         if (revoked)
-            crl.AddEntry(Convert.FromHexString("5E71A1"));
+            crl.AddEntry(Convert.FromHexString(crlSerial));
         Directory.CreateDirectory(_dir.Combine("pki"));
         File.WriteAllText(_dir.Combine("pki", "crl.pem"), PemEncoding.WriteString("X509 CRL",
             crl.Build(ca, 1, DateTimeOffset.UtcNow.AddDays(1), HashAlgorithmName.SHA256)));
+    }
+
+    [Theory]
+    [InlineData("008071A1", "8071A1")]
+    [InlineData("008071A1", "00:80:71:A1")]
+    [InlineData("7F71A1", "007F71A1")]
+    public async Task CrlDerSerialSignByte_DoesNotExposeRevokedClient(string crlSerial, string registrySerial)
+    {
+        AddClient(serial: registrySerial);
+        var sut = Create();
+        Assert.NotNull(await sut.FindAsync("10.50.28.2", default));
+        WriteCrl(revoked: true, crlSerial: crlSerial);
+
+        Assert.Null(await sut.FindAsync("10.50.28.2", default));
     }
 
     private void AddClient(bool service = true, string serial = "5E71A1", long? connected = null)

@@ -1,3 +1,5 @@
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Responses;
 using System.Text;
 using DataGateMonitor.SharedModels.Responses;
 using DataGateOpenVpnManager.Services.LocalIssuance;
@@ -45,10 +47,10 @@ public class LocalAdminController(
             Content(await localProfileService.GetOvpnAsync(commonName, cancellationToken), "application/x-openvpn-profile", Encoding.UTF8));
 
     [HttpGet("node-identity")]
-    public IActionResult NodeIdentity() => Ok(ApiResponse<object>.SuccessResponse(new
+    public ActionResult<ApiResponse<LocalNodeIdentityResponse>> NodeIdentity() => Ok(ApiResponse<LocalNodeIdentityResponse>.SuccessResponse(new LocalNodeIdentityResponse
     {
-        nodeIdentity.Fingerprint,
-        nodeIdentity.PublicKeyPem,
+        Fingerprint = nodeIdentity.Fingerprint,
+        PublicKeyPem = nodeIdentity.PublicKeyPem,
         PendingEvents = outbox.ListPending().Count,
     }));
 

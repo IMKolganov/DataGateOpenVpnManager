@@ -1,3 +1,6 @@
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance;
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Requests;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
@@ -20,7 +23,7 @@ public class LocalProfileServiceTests : IDisposable
     private readonly Mock<IOvpnFileService> _ovpn = new();
     private readonly Mock<IEasyRsaService> _easyRsa = new();
     private readonly Mock<ILocalIssuanceOutbox> _outbox = new();
-    private readonly List<LocalIssuanceEvent> _events = [];
+    private readonly List<LocalIssuanceEventRequest> _events = [];
     private readonly List<ServerCertificate> _index = [];
     private readonly LocalProfileRegistry _registry;
     private readonly LocalIssuanceOptions _options;
@@ -35,8 +38,8 @@ public class LocalProfileServiceTests : IDisposable
 
         _easyRsa.Setup(e => e.GetAllCertificateInfoInIndexFileAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(() => _index.ToList());
-        _outbox.Setup(o => o.EnqueueAsync(It.IsAny<LocalIssuanceEvent>(), It.IsAny<CancellationToken>()))
-            .Callback<LocalIssuanceEvent, CancellationToken>((e, _) => _events.Add(e))
+        _outbox.Setup(o => o.EnqueueAsync(It.IsAny<LocalIssuanceEventRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<LocalIssuanceEventRequest, CancellationToken>((e, _) => _events.Add(e))
             .Returns(Task.CompletedTask);
         _ovpn.Setup(o => o.IssueOvpnFile(It.IsAny<OvpnIssueRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((OvpnIssueRequest r, CancellationToken _) =>

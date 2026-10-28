@@ -1,3 +1,7 @@
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance;
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Requests;
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Responses;
 using System.Text.RegularExpressions;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
 using DataGateMonitor.SharedModels.Enums;
@@ -6,33 +10,6 @@ using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
 
 namespace DataGateOpenVpnManager.Services.LocalIssuance;
-
-public sealed class LocalProfileCreateRequest
-{
-    public string CommonName { get; set; } = string.Empty;
-    public bool IsServiceProfile { get; set; }
-
-    /// <summary>Host clients dial; defaults to PUBLIC_IP.</summary>
-    public string? Remote { get; set; }
-
-    /// <summary>Defaults to the node's OpenVPN PORT.</summary>
-    public int? Port { get; set; }
-
-    public int? ExpireDays { get; set; }
-}
-
-public sealed class LocalProfileView
-{
-    public string CommonName { get; set; } = string.Empty;
-    public string Origin { get; set; } = "local";
-    public string Status { get; set; } = "unknown";
-    public string SerialNumber { get; set; } = string.Empty;
-    public string? CertFingerprintSha256 { get; set; }
-    public bool IsServiceProfile { get; set; }
-    public DateTimeOffset? IssuedAt { get; set; }
-    public DateTimeOffset? ExpiresAt { get; set; }
-    public DateTimeOffset? RevokedAt { get; set; }
-}
 
 public interface ILocalProfileService
 {
@@ -301,8 +278,10 @@ public sealed partial class LocalProfileService(
         RevokedAt = record.RevokedAt,
     };
 
-    private static LocalIssuanceEvent ToEvent(LocalProfileRecord record, string eventType, DateTimeOffset now) => new()
+    private static LocalIssuanceEventRequest ToEvent(LocalProfileRecord record, string eventType, DateTimeOffset now) => new()
     {
+        EventId = Guid.NewGuid(),
+        Origin = "local",
         EventType = eventType,
         CommonName = record.CommonName,
         SerialNumber = record.SerialNumber,

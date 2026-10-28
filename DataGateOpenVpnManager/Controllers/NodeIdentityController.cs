@@ -1,3 +1,4 @@
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.LocalIssuance.Responses;
 using DataGateMonitor.SharedModels.Responses;
 using DataGateOpenVpnManager.Services.LocalIssuance;
 using Microsoft.AspNetCore.Mvc;
@@ -13,12 +14,12 @@ namespace DataGateOpenVpnManager.Controllers;
 public class NodeIdentityController(LocalIssuanceOptions options, IServiceProvider services) : ControllerBase
 {
     [HttpGet]
-    public IActionResult Get()
+    public ActionResult<ApiResponse<NodeIdentityResponse>> Get()
     {
         if (!options.Enabled)
-            return NotFound(ApiResponse<object>.ErrorResponse("Local issuance is disabled on this node."));
+            return NotFound(ApiResponse<NodeIdentityResponse>.ErrorResponse("Local issuance is disabled on this node."));
 
         var identity = services.GetRequiredService<INodeIdentity>();
-        return Ok(ApiResponse<object>.SuccessResponse(new { identity.Fingerprint, identity.PublicKeyPem }));
+        return Ok(ApiResponse<NodeIdentityResponse>.SuccessResponse(new NodeIdentityResponse { Fingerprint = identity.Fingerprint, PublicKeyPem = identity.PublicKeyPem }));
     }
 }

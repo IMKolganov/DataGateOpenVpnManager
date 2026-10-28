@@ -5,9 +5,9 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
-        <Version>1.2.5.108</Version>
-        <AssemblyVersion>1.2.5.108</AssemblyVersion>
-        <FileVersion>1.2.5.108</FileVersion>
+        <Version>1.2.5.109</Version>
+        <AssemblyVersion>1.2.5.109</AssemblyVersion>
+        <FileVersion>1.2.5.109</FileVersion>
         <RootNamespace>DataGateOpenVpnManager</RootNamespace>
     </PropertyGroup>
 
@@ -18,7 +18,7 @@
         <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="10.0.13" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <!-- DataGateMonitor.SharedModels: NuGet package only; do not use ProjectReference to the SharedModels .csproj. -->
-        <PackageReference Include="DataGateMonitor.SharedModels" Version="1.0.84" />
+        <PackageReference Include="DataGateMonitor.SharedModels" Version="1.0.85" />
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
         <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />

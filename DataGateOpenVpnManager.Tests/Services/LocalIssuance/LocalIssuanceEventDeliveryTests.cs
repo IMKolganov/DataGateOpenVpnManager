@@ -1,3 +1,5 @@
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance;
+using DataGateMonitor.SharedModels.DataGateMonitor.LocalIssuance.Requests;
 using System.Net;
 using System.Security.Cryptography;
 using DataGateOpenVpnManager.Services.LocalIssuance;
@@ -28,8 +30,10 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
 
     private LocalIssuanceOutbox NewOutbox() => new(_options, NullLogger<LocalIssuanceOutbox>.Instance);
 
-    private static LocalIssuanceEvent Issued(string serial, string cn = "db1") => new()
+    private static LocalIssuanceEventRequest Issued(string serial, string cn = "db1") => new()
     {
+        EventId = Guid.NewGuid(),
+        Origin = "local",
         EventType = LocalIssuanceEventTypes.Issued,
         CommonName = cn,
         SerialNumber = serial,
@@ -74,7 +78,7 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
         var request = Assert.Single(backend.Requests);
         Assert.Equal("/api/open-vpn-servers/local-issuance-events", request.Path);
         Assert.Equal(_identity.Fingerprint, request.Headers[NodeRequestSignature.KeyIdHeader]);
-        var evt = JsonConvert.DeserializeObject<LocalIssuanceEvent>(request.Body)!;
+        var evt = JsonConvert.DeserializeObject<LocalIssuanceEventRequest>(request.Body)!;
         Assert.Equal(("issued", "local", "0A01", "db1", true),
             (evt.EventType, evt.Origin, evt.SerialNumber, evt.CommonName, evt.IsServiceProfile));
 
@@ -105,7 +109,7 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
         var backend = new FakeBackend(HttpStatusCode.OK);
         Assert.True(await NewDelivery(restarted, backend).DeliverPendingAsync(CancellationToken.None));
 
-        Assert.Equal("0A02", JsonConvert.DeserializeObject<LocalIssuanceEvent>(Assert.Single(backend.Requests).Body)!.SerialNumber);
+        Assert.Equal("0A02", JsonConvert.DeserializeObject<LocalIssuanceEventRequest>(Assert.Single(backend.Requests).Body)!.SerialNumber);
         Assert.Empty(restarted.ListPending());
     }
 
@@ -114,7 +118,7 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
     {
         var outbox = NewOutbox();
         await outbox.EnqueueAsync(Issued("0A03"), CancellationToken.None);
-        await outbox.EnqueueAsync(new LocalIssuanceEvent { EventType = LocalIssuanceEventTypes.Revoked, SerialNumber = "0A03", CommonName = "db1" },
+        await outbox.EnqueueAsync(new LocalIssuanceEventRequest { EventId = Guid.NewGuid(), Origin = "local", EventType = LocalIssuanceEventTypes.Revoked, SerialNumber = "0A03", CommonName = "db1" },
             CancellationToken.None);
         var backend = new FakeBackend(HttpStatusCode.InternalServerError);
 
