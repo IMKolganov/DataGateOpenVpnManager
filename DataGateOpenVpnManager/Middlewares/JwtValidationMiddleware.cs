@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateOpenVpnManager.Services.LocalIssuance;
 
 namespace DataGateOpenVpnManager.Middlewares;
 
@@ -53,6 +54,30 @@ public class JwtValidationMiddleware(RequestDelegate next)
         var requestPath = context.Request.Path;
         var token = ExtractToken(context);
         var requestContext = context.ToJwtValidationRequestContext();
+
+        // This read-only listener has no JWT surface and exposes no other routes.
+        if (ServiceClientLookupChannel.IsLookupPath(requestPath)
+            || ServiceClientLookupChannel.IsLookupConnection(context))
+        {
+            if (ServiceClientLookupChannel.IsLookupPath(requestPath) && ServiceClientLookupChannel.IsAllowed(context))
+                await next(context);
+            else
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        // Node-local admin channel: only over the admin Unix socket; elsewhere it does not exist (no JWT, no loopback).
+        if (LocalAdminChannel.IsLocalAdminPath(requestPath))
+        {
+            if (LocalAdminChannel.IsLocalAdminConnection(context))
+            {
+                await next(context);
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
 
         // Allow unauthenticated access to Swagger and other excluded paths
         if (ExcludedPaths.Any(p => requestPath.StartsWithSegments(p, StringComparison.OrdinalIgnoreCase)))

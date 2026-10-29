@@ -1,3 +1,4 @@
+using DataGateMonitor.SharedModels.DataGateOpenVpnManager.PiHole.Dto;
 using DataGateOpenVpnManager.Controllers;
 using DataGateOpenVpnManager.Tests.Services.PiHole;
 using DataGateOpenVpnManager.Models;

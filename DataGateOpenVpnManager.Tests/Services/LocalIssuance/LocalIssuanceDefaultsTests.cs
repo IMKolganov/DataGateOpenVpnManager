@@ -1,0 +1,85 @@
+using DataGateMonitor.SharedModels.DataGateMonitor.VpnServers.Requests;
+using DataGateMonitor.SharedModels.Enums;
+using DataGateOpenVpnManager.Configurations;
+using DataGateOpenVpnManager.Services;
+using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateOpenVpnManager.Services.LocalIssuance;
+using DataGateOpenVpnManager.Tests.TestSupport;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace DataGateOpenVpnManager.Tests.Services.LocalIssuance;
+
+/// <summary>Without LOCAL_ISSUANCE_ENABLED an existing node behaves exactly as before.</summary>
+public class LocalIssuanceDefaultsTests
+{
+    private static IConfiguration Config(Dictionary<string, string?> values) =>
+        new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+    [Fact]
+    public void FromConfiguration_Defaults_AreOff()
+    {
+        var options = LocalIssuanceOptions.FromConfiguration(Config(new() { ["DATA_DIR"] = "/openvpn-udp" }));
+
+        Assert.False(options.Enabled);
+        Assert.Equal("/openvpn-udp/local-issuance/admin.sock", options.SocketPath);
+    }
+
+    [Fact]
+    public void Disabled_RegistersNoNodeKeyNoOutboxNoDeliveryWorker()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.ConfigureLocalIssuance(Config(new() { ["Backend:BaseUrl"] = "http://backend/" }));
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Null(provider.GetService<INodeIdentity>());
+        Assert.Null(provider.GetService<ILocalIssuanceOutbox>());
+        Assert.DoesNotContain(services, d => d.ImplementationType == typeof(LocalIssuanceEventDeliveryService));
+    }
+
+    [Fact]
+    public void Enabled_RegistersDeliveryWorker()
+    {
+        using var dir = new TempDir();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.ConfigureLocalIssuance(Config(new()
+        {
+            ["Backend:BaseUrl"] = "http://backend/",
+            [LocalIssuanceOptions.EnabledKey] = "true",
+            [LocalIssuanceOptions.DirKey] = dir.Combine("li"),
+        }));
+
+        Assert.Contains(services, d => d.ServiceType == typeof(IHostedService)
+                                       && d.ImplementationType == typeof(LocalIssuanceEventDeliveryService));
+    }
+
+    [Fact]
+    public void Announce_Disabled_IsSameJsonAsBefore_Enabled_AddsNodeKey()
+    {
+        var request = new AnnounceVpnServerRequest { ServerType = VpnServerType.OpenVpn, ApiUrl = "http://203.0.113.10:5009/" };
+
+        var disabled = NewAnnounce(new LocalIssuanceOptions(), Mock.Of<IServiceProvider>());
+        Assert.Equal(JsonConvert.SerializeObject(request), disabled.BuildAnnounceJson(request));
+
+        var identity = new Mock<INodeIdentity>();
+        identity.SetupGet(i => i.PublicKeyPem).Returns("-----BEGIN PUBLIC KEY-----\nAAA\n-----END PUBLIC KEY-----");
+        var sp = new Mock<IServiceProvider>();
+        sp.Setup(s => s.GetService(typeof(INodeIdentity))).Returns(identity.Object);
+        var enabled = NewAnnounce(new LocalIssuanceOptions { Enabled = true }, sp.Object);
+
+        var json = JObject.Parse(enabled.BuildAnnounceJson(request));
+        Assert.Equal(identity.Object.PublicKeyPem, json[VpnServerAnnounceHostedService.NodePublicKeyField]!.Value<string>());
+        Assert.Equal("http://203.0.113.10:5009/", json["ApiUrl"]!.Value<string>());
+    }
+
+    private static VpnServerAnnounceHostedService NewAnnounce(LocalIssuanceOptions options, IServiceProvider services) =>
+        new(Mock.Of<IHttpClientFactory>(), Mock.Of<IExternalIpAddressService>(), Config(new()), options, services,
+            NullLogger<VpnServerAnnounceHostedService>.Instance);
+}

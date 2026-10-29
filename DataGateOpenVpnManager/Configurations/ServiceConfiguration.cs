@@ -4,6 +4,10 @@ using DataGateOpenVpnManager.Services;
 using DataGateOpenVpnManager.Services.EasyRsaServices;
 using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateOpenVpnManager.Services.LocalIssuance;
+using DataGateOpenVpnManager.Services.OpenVpnTelnet;
+using DataGateOpenVpnManager.Services.Proxy;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace DataGateOpenVpnManager.Configurations;
 
@@ -23,6 +27,7 @@ public static class ServiceConfiguration
         });
         services.AddSingleton<IOvpnIssuanceTracker, OvpnIssuanceTracker>();
         services.AddScoped<IOvpnFileService, OvpnFileService>();
+        services.ConfigureLocalIssuance(config);
 
         // EasyRsa services — PKI mutex must be singleton so all scopes share one gate per path.
         services.AddSingleton<IEasyRsaPkiMutex, EasyRsaPkiMutex>();
@@ -89,5 +94,40 @@ public static class ServiceConfiguration
         services.AddControllers().AddNewtonsoftJson();
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
+    }
+
+    /// <summary>
+    /// Node key, registry, outbox and delivery worker exist only with LOCAL_ISSUANCE_ENABLED=true.
+    /// </summary>
+    public static void ConfigureLocalIssuance(this IServiceCollection services, IConfiguration config)
+    {
+        var options = LocalIssuanceOptions.FromConfiguration(config);
+        services.AddSingleton(options);
+        services.TryAddSingleton(TimeProvider.System);
+        var lookup = ServiceClientLookupOptions.FromConfiguration(config);
+        services.AddSingleton(lookup);
+        if (lookup.Enabled)
+        {
+            services.AddSingleton<ILocalProfileRegistry, LocalProfileRegistry>();
+            services.AddScoped<IServiceClientLookup, ServiceClientLookup>();
+        }
+
+        if (!options.Enabled)
+            return;
+
+        services.AddSingleton<INodeIdentity, NodeIdentity>();
+        services.TryAddSingleton<ILocalProfileRegistry, LocalProfileRegistry>();
+        services.AddSingleton<ILocalIssuanceOutbox, LocalIssuanceOutbox>();
+        services.AddScoped<ILocalProfileService, LocalProfileService>();
+
+        services.AddHttpClient(LocalIssuanceEventDeliveryService.HttpClientName, client =>
+        {
+            var baseUrl = config["Backend:BaseUrl"];
+            client.BaseAddress = new Uri(
+                VpnServerAnnounceApiUrlResolver.EnsureTrailingSlash(
+                    baseUrl ?? throw new InvalidOperationException("Backend:BaseUrl is required")));
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddHostedService<LocalIssuanceEventDeliveryService>();
     }
 }

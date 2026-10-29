@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using System.Net;
+using DataGateOpenVpnManager.Services.LocalIssuance;
 
 namespace DataGateOpenVpnManager.Configurations;
 
@@ -16,8 +17,35 @@ public static class WebHostConfiguration
             options.MaxReadBufferSize = 1024 * 1024;
         });
 
+        var localIssuance = LocalIssuanceOptions.FromConfiguration(builder.Configuration);
+        if (localIssuance.Enabled)
+            LocalAdminChannel.PrepareSocket(localIssuance);
+
+        var lookup = ServiceClientLookupOptions.FromConfiguration(builder.Configuration);
+        if (lookup.Enabled && lookup.Port is < 1 or > 65535)
+            throw new InvalidOperationException($"{ServiceClientLookupOptions.PortKey} must be between 1 and 65535.");
+
         builder.WebHost.ConfigureKestrel(options =>
         {
+            if (lookup.Enabled)
+            {
+                options.Listen(IPAddress.Loopback, lookup.Port, listen =>
+                {
+                    listen.Protocols = HttpProtocols.Http1;
+                    listen.Use(ServiceClientLookupChannel.MarkConnection);
+                });
+            }
+
+            if (localIssuance.Enabled)
+            {
+                // Node-local admin channel (root-only Unix socket); see LocalAdminChannel.
+                options.ListenUnixSocket(localIssuance.SocketPath, listen =>
+                {
+                    listen.Protocols = HttpProtocols.Http1;
+                    listen.Use(LocalAdminChannel.MarkConnection);
+                });
+            }
+
             var proxyMode = (Environment.GetEnvironmentVariable("OPENVPN_WSS_UDP_PROXY") ?? "dotnet")
                 .Trim()
                 .ToLowerInvariant();
