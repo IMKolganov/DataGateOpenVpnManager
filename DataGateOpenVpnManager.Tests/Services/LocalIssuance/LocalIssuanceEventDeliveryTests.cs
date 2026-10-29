@@ -140,6 +140,22 @@ public class LocalIssuanceEventDeliveryTests : IDisposable
     }
 
     [Fact]
+    public async Task MissingBackendBaseUrl_KeepsEventInOutbox()
+    {
+        var outbox = NewOutbox();
+        await outbox.EnqueueAsync(Issued("0A07"), CancellationToken.None);
+        var factory = new Mock<IHttpClientFactory>();
+        factory.Setup(f => f.CreateClient(LocalIssuanceEventDeliveryService.HttpClientName))
+            .Returns(() => new HttpClient());
+        var delivery = new LocalIssuanceEventDeliveryService(
+            factory.Object, outbox, _identity, TimeProvider.System,
+            NullLogger<LocalIssuanceEventDeliveryService>.Instance);
+
+        Assert.False(await delivery.DeliverPendingAsync(CancellationToken.None));
+        Assert.Equal("0A07", Assert.Single(outbox.ListPending()).Event.SerialNumber);
+    }
+
+    [Fact]
     public async Task BackendRejectsAsMalformed_EventMovedAside_NotLost()
     {
         var outbox = NewOutbox();

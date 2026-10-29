@@ -56,10 +56,10 @@ public sealed class VpnServerAnnounceHostedService(
 
     private async Task AnnounceWithRetriesAsync(CancellationToken cancellationToken)
     {
-        var backendBaseUrl = configuration["Backend:BaseUrl"];
-        if (string.IsNullOrWhiteSpace(backendBaseUrl))
+        if (BackendBaseAddress.TryResolve(configuration) is null)
         {
-            logger.LogWarning("Skipping VPN server announce: Backend:BaseUrl is not configured.");
+            logger.LogError(
+                "Backend:BaseUrl is missing or not an absolute http(s) URL. Discovery registration stays pending until Backend__BaseUrl is set and the container is restarted.");
             return;
         }
 
