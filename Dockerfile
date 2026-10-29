@@ -1,9 +1,11 @@
 # ==========================
-# Stage 1: Build OpenVPN from source (override: --build-arg OPENVPN_VERSION=2.7.6)
+# Stage 1: Build OpenVPN from source (override: --build-arg OPENVPN_VERSION=2.7.8)
+# The ./openvpn submodule pins this same tag so the version is visible in git.
+# The image still downloads the release tarball; that checkout is not copied in.
 # ==========================
 FROM debian:12-slim AS openvpn-build
 
-ARG OPENVPN_VERSION=2.7.6
+ARG OPENVPN_VERSION=2.7.8
 
 RUN apt-get update && \
     apt-get install -y \
