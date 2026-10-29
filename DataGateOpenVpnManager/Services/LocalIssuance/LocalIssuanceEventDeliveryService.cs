@@ -89,9 +89,21 @@ public sealed class LocalIssuanceEventDeliveryService(
         return true;
     }
 
+    private int _missingBackendLogged;
+
     private async Task<DeliveryOutcome> SendAsync(LocalIssuanceEventRequest evt, CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(HttpClientName);
+        if (client.BaseAddress is null)
+        {
+            if (Interlocked.Exchange(ref _missingBackendLogged, 1) == 0)
+            {
+                logger.LogError(
+                    "Backend:BaseUrl is not configured. Local issuance notifications stay in the outbox until Backend__BaseUrl is set and the container is restarted.");
+            }
+
+            return DeliveryOutcome.Retry.Instance;
+        }
         var body = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(evt));
 
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(client.BaseAddress!, EventsPath));

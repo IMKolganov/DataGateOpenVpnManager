@@ -65,8 +65,7 @@ public static class ServiceConfiguration
         // HttpClient for MicroserviceJwtValidator
         services.AddHttpClient<MicroserviceJwtValidator>(client =>
         {
-            var baseUrl = config["Backend:BaseUrl"];
-            client.BaseAddress = new Uri(baseUrl ?? throw new InvalidOperationException("Backend:BaseUrl is required"));
+            client.BaseAddress = BackendBaseAddress.TryResolve(config);
         });
 
         services.AddSingleton<IMicroserviceJwtValidator>(sp =>
@@ -80,10 +79,7 @@ public static class ServiceConfiguration
 
         services.AddHttpClient(VpnServerAnnounceHostedService.HttpClientName, client =>
         {
-            var baseUrl = config["Backend:BaseUrl"];
-            client.BaseAddress = new Uri(
-                VpnServerAnnounceApiUrlResolver.EnsureTrailingSlash(
-                    baseUrl ?? throw new InvalidOperationException("Backend:BaseUrl is required")));
+            client.BaseAddress = BackendBaseAddress.TryResolve(config);
             client.Timeout = TimeSpan.FromSeconds(30);
         });
         services.AddHostedService<VpnServerAnnounceHostedService>();
@@ -122,10 +118,7 @@ public static class ServiceConfiguration
 
         services.AddHttpClient(LocalIssuanceEventDeliveryService.HttpClientName, client =>
         {
-            var baseUrl = config["Backend:BaseUrl"];
-            client.BaseAddress = new Uri(
-                VpnServerAnnounceApiUrlResolver.EnsureTrailingSlash(
-                    baseUrl ?? throw new InvalidOperationException("Backend:BaseUrl is required")));
+            client.BaseAddress = BackendBaseAddress.TryResolve(config);
             client.Timeout = TimeSpan.FromSeconds(30);
         });
         services.AddHostedService<LocalIssuanceEventDeliveryService>();

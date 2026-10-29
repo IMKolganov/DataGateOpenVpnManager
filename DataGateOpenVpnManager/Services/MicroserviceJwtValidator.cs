@@ -15,6 +15,13 @@ public class MicroserviceJwtValidator(HttpClient httpClient, ILogger<Microservic
 
     public async Task InitAsync()
     {
+        if (httpClient.BaseAddress is null)
+        {
+            logger.LogError(
+                "Backend:BaseUrl is not configured. The node is up; the JWT public key stays pending until Backend__BaseUrl is set and the container is restarted.");
+            return;
+        }
+
         const int delaySeconds = 5;
         var random = new Random();
 
