@@ -6,6 +6,7 @@ using DataGateMonitor.SharedModels.Enums;
 using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.Interfaces;
 using DataGateOpenVpnManager.Services.LocalIssuance;
+using DataGateOpenVpnManager.Services.PiHole;
 using Newtonsoft.Json;
 
 namespace DataGateOpenVpnManager.Services;
@@ -117,10 +118,9 @@ public sealed class VpnServerAnnounceHostedService(
                     return;
                 }
 
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 logger.LogWarning(
-                    "VPN server announce attempt {Attempt}/{MaxAttempts} returned {StatusCode}: {Body}",
-                    attempt, MaxAttempts, (int)response.StatusCode, Truncate(body, 256));
+                    "VPN server announce attempt {Attempt}/{MaxAttempts} returned {StatusCode}.",
+                    attempt, MaxAttempts, (int)response.StatusCode);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -148,10 +148,42 @@ public sealed class VpnServerAnnounceHostedService(
 
     internal string BuildAnnounceJson(AnnounceVpnServerRequest request)
     {
+        AddPiHoleConfiguration(request);
         request.NodePublicKeyPem = localIssuanceOptions.Enabled
             ? services.GetRequiredService<INodeIdentity>().PublicKeyPem
             : null;
         return JsonConvert.SerializeObject(request);
+    }
+
+    private void AddPiHoleConfiguration(AnnounceVpnServerRequest request)
+    {
+        var options = services.GetService<IPiHoleRuntimeOptionsStore>()?.GetEffective();
+        if (options is null)
+            return;
+
+        request.HasPiHole = !string.IsNullOrWhiteSpace(options.BaseUrl) &&
+                            !string.IsNullOrWhiteSpace(options.AppPassword);
+        request.PiHole = null;
+        if (request.HasPiHole != true)
+            return;
+
+        var backend = BackendBaseAddress.TryResolve(configuration);
+        if (backend is not null && backend.Scheme != Uri.UriSchemeHttps && !backend.IsLoopback)
+        {
+            request.HasPiHole = null;
+            logger.LogWarning("Pi-hole credentials were omitted from announce: configure an HTTPS backend URL.");
+            return;
+        }
+
+        request.PiHole = new AnnouncePiHoleConfig
+        {
+            BaseUrl = options.BaseUrl,
+            AppPassword = options.AppPassword,
+            PollIntervalSeconds = options.PollIntervalSeconds,
+            BatchSize = options.BatchSize,
+            LookbackSeconds = options.LookbackSeconds,
+            ClientSubnetPrefix = options.ClientSubnetPrefix
+        };
     }
 
     private static string ResolveSuggestedName()
@@ -168,12 +200,5 @@ public sealed class VpnServerAnnounceHostedService(
         }
 
         return Environment.MachineName;
-    }
-
-    private static string Truncate(string? value, int max)
-    {
-        if (string.IsNullOrEmpty(value) || value.Length <= max)
-            return value ?? string.Empty;
-        return value[..max] + "…";
     }
 }
