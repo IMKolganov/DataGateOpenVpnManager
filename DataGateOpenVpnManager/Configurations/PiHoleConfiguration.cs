@@ -8,7 +8,11 @@ public static class PiHoleConfiguration
     public static void ConfigurePiHole(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<PiHoleOptions>(config.GetSection("PiHole"));
-        services.PostConfigure<PiHoleOptions>(options => PiHoleEnvOverrides.ApplyLegacyEnv(config, options));
+        services.PostConfigure<PiHoleOptions>(options =>
+        {
+            PiHoleEnvOverrides.ApplyBootstrap(config, options);
+            PiHoleEnvOverrides.ApplyLegacyEnv(config, options);
+        });
 
         services.AddSingleton<IPiHoleRuntimeOptionsStore, PiHoleRuntimeOptionsStore>();
         services.AddSingleton<IPiHoleCollectorStatusStore, PiHoleCollectorStatusStore>();
