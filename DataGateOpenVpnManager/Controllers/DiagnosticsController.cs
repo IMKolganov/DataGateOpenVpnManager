@@ -138,7 +138,9 @@ public class DiagnosticsController(
                 statusStore.GetSnapshot(),
                 cursorStore.GetLastUntilUtc(),
                 probe,
-                runtimeOptions.PersistedAppliedAtUtc);
+                runtimeOptions.PersistedAppliedAtUtc,
+                runtimeOptions.CredentialSource,
+                runtimeOptions.AnnounceState);
             return Ok(ApiResponse<PiHoleDiagnosticsResponse>.SuccessResponse(response));
         }
         catch (Exception ex)

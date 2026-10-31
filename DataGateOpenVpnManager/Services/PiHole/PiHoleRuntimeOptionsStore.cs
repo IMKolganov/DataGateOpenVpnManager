@@ -1,4 +1,5 @@
 using System.Text.Json;
+using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Models;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,12 @@ public interface IPiHoleRuntimeOptionsStore
     /// <summary>True when PIHOLE_* / PiHole__* env vars override dashboard or persisted config.</summary>
     bool HasEnvOverrides { get; }
 
+    /// <summary>Origin of the effective app password: None, Bootstrap, Env, or Dashboard.</summary>
+    string CredentialSource { get; }
+
+    /// <summary>What the startup announce does with the effective credentials; see <see cref="PiHoleAnnounceState"/>.</summary>
+    string AnnounceState { get; }
+
     void Apply(PiHoleOptions options);
 }
 
@@ -26,6 +33,7 @@ public sealed class PiHoleRuntimeOptionsStore : IPiHoleRuntimeOptionsStore
     };
 
     private readonly IOptionsMonitor<PiHoleOptions> _optionsMonitor;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<PiHoleRuntimeOptionsStore> _logger;
     private readonly PiHoleEnvOverrides _envOverrides;
     private readonly string _path;
@@ -48,6 +56,7 @@ public sealed class PiHoleRuntimeOptionsStore : IPiHoleRuntimeOptionsStore
         bool loadFromDisk)
     {
         _optionsMonitor = optionsMonitor;
+        _configuration = configuration;
         _logger = logger;
         _path = BuildPath(configuration);
         _envOverrides = PiHoleEnvOverrides.FromConfiguration(configuration);
@@ -57,6 +66,24 @@ public sealed class PiHoleRuntimeOptionsStore : IPiHoleRuntimeOptionsStore
     }
 
     public bool HasEnvOverrides => _envOverrides.HasAny;
+
+    public string CredentialSource
+    {
+        get
+        {
+            lock (_sync)
+            {
+                if (!string.IsNullOrWhiteSpace(_envOverrides.AppPassword))
+                    return "Env";
+                if (!string.IsNullOrEmpty(_override?.AppPassword))
+                    return "Dashboard";
+                return string.IsNullOrEmpty(_optionsMonitor.CurrentValue.AppPassword) ? "None" : "Bootstrap";
+            }
+        }
+    }
+
+    public string AnnounceState =>
+        PiHoleAnnounceState.Resolve(GetEffective(), BackendBaseAddress.TryResolve(_configuration));
 
     public DateTimeOffset? PersistedAppliedAtUtc
     {
