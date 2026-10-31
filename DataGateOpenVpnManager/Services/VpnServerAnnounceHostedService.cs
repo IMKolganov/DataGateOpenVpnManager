@@ -161,14 +161,13 @@ public sealed class VpnServerAnnounceHostedService(
         if (options is null)
             return;
 
-        request.HasPiHole = !string.IsNullOrWhiteSpace(options.BaseUrl) &&
-                            !string.IsNullOrWhiteSpace(options.AppPassword);
+        var state = PiHoleAnnounceState.Resolve(options, BackendBaseAddress.TryResolve(configuration));
+        request.HasPiHole = state != PiHoleAnnounceState.NoCredentials;
         request.PiHole = null;
         if (request.HasPiHole != true)
             return;
 
-        var backend = BackendBaseAddress.TryResolve(configuration);
-        if (backend is not null && backend.Scheme != Uri.UriSchemeHttps && !backend.IsLoopback)
+        if (state == PiHoleAnnounceState.OmittedInsecureBackend)
         {
             request.HasPiHole = null;
             logger.LogWarning("Pi-hole credentials were omitted from announce: configure an HTTPS backend URL.");

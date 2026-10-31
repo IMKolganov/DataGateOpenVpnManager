@@ -10,7 +10,9 @@ public static class PiHoleDiagnosticsFactory
         PiHoleCollectorStatusSnapshot status,
         DateTimeOffset? cursorUntilUtc,
         (bool Authenticated, int SampleQueryCount, string? Error) probe,
-        DateTimeOffset? persistedConfigAppliedAtUtc = null)
+        DateTimeOffset? persistedConfigAppliedAtUtc = null,
+        string? credentialSource = null,
+        string? announceState = null)
     {
         var checkedAt = DateTime.UtcNow;
         var hasPassword = !string.IsNullOrEmpty(options.AppPassword);
@@ -37,7 +39,9 @@ public static class PiHoleDiagnosticsFactory
             LastPollQueriesAfterFilter = status.LastPollQueriesAfterFilter,
             LastPollQueriesEnriched = status.LastPollQueriesEnriched,
             LastPollQueriesForwarded = status.LastPollQueriesForwarded,
-            LastCursorUntilUtc = cursorUntilUtc?.UtcDateTime ?? status.LastCursorUntilUtc?.UtcDateTime
+            LastCursorUntilUtc = cursorUntilUtc?.UtcDateTime ?? status.LastCursorUntilUtc?.UtcDateTime,
+            CredentialSource = credentialSource,
+            AnnounceState = announceState
         };
     }
 }
