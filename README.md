@@ -219,6 +219,30 @@ Wazuh rule **100913** should match `[OpenVpnTlsAppClient]` instead of the raw `T
 
 ---
 
+## UDP WSS delivery
+
+The .NET UDP→WebSocket proxy groups already queued datagrams into messages with a
+48 KiB batching target. A lone datagram is sent immediately, without waiting for
+another packet. The four-message send queue waits for space when WebSocket sends
+are slow, instead of dropping new messages. Queued buffers are returned to the
+pool when a session is cancelled or a send fails.
+
+The wire format remains `[u16_be length][datagram]...`; existing clients already
+decode multiple datagrams per WebSocket message. Socket buffers still request
+4 MiB, so the host/network namespace must allow that size via `net.core.rmem_max`
+and `net.core.wmem_max`. Finite kernel buffers can still overflow if an upstream
+sender continuously exceeds the client's capacity.
+
+Delivery regression tests use real loopback UDP sockets and a controlled
+WebSocket sender to check bursts, batching, isolated packets, cancellation and
+send failures:
+
+```bash
+dotnet test DataGateOpenVpnManager.Tests --filter FullyQualifiedName~OpenVpnProxyUdpDeliveryTests
+```
+
+---
+
 ## 🔐 Local profile issuance (service profiles)
 
 Issue profiles **on the node itself** (no dashboard request) — e.g. a home hub handing service profiles to

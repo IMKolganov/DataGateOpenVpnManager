@@ -5,17 +5,17 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <ApplicationIcon>wwwroot\favicon.ico</ApplicationIcon>
-        <Version>1.2.5.112</Version>
-        <AssemblyVersion>1.2.5.112</AssemblyVersion>
-        <FileVersion>1.2.5.112</FileVersion>
+        <Version>1.2.5.113</Version>
+        <AssemblyVersion>1.2.5.113</AssemblyVersion>
+        <FileVersion>1.2.5.113</FileVersion>
         <RootNamespace>DataGateOpenVpnManager</RootNamespace>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Elastic.Clients.Elasticsearch" Version="9.5.3" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.13" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
-        <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="10.0.13" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.14" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="10.0.14" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <!-- DataGateMonitor.SharedModels: NuGet package only; do not use ProjectReference to the SharedModels .csproj. -->
         <PackageReference Include="DataGateMonitor.SharedModels" Version="1.0.87" />
