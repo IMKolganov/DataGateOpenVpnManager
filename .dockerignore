@@ -4,3 +4,5 @@
 wss-udp-proxy-rs/target/
 **/*.user
 **/.git
+# Upstream OpenVPN pin (git submodule). The image builds from the release tarball.
+/openvpn/

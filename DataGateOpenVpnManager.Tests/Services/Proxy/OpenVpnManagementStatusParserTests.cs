@@ -16,6 +16,14 @@ public class OpenVpnManagementStatusParserTests
         """;
 
     [Fact]
+    public void ParsesRealStatus3ConnectedSinceUnixField()
+    {
+        var clients = OpenVpnManagementStatusParser.ParseClientList(
+            "CLIENT_LIST\tdb1\t203.0.113.4:12000\t10.50.28.2\t\t12\t34\t2026-10-29 01:00:00\t1793235600\tUNDEF\t0\t1\tAES-256-GCM\nEND");
+        Assert.Equal(1793235600, Assert.Single(clients).ConnectedSinceUnix);
+    }
+
+    [Fact]
     public void ParseClientList_ParsesStatus3Rows()
     {
         var clients = OpenVpnManagementStatusParser.ParseClientList(SampleStatus);

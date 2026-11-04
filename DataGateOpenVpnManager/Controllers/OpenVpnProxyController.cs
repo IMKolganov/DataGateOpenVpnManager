@@ -395,7 +395,7 @@ public class OpenVpnProxyController(
     /// <summary>
     /// UDP→WS with producer/sender split so batching continues while <see cref="WebSocket.SendAsync"/> is in flight.
     /// </summary>
-    private static async Task PumpUdpToWebSocket(
+    internal static async Task PumpUdpToWebSocket(
         WebSocket ws,
         Socket socket,
         CancellationToken ct,
@@ -408,8 +408,9 @@ public class OpenVpnProxyController(
             {
                 SingleReader = true,
                 SingleWriter = true,
-                // Drop newest under backpressure (UDP-like); TryWrite false → return buffer.
-                FullMode = BoundedChannelFullMode.DropWrite,
+                // Keep bursts queued while WebSocket sends are in flight. The bounded queue
+                // applies backpressure instead of silently discarding VPN datagrams.
+                FullMode = BoundedChannelFullMode.Wait,
                 AllowSynchronousContinuations = false
             });
 
@@ -418,7 +419,7 @@ public class OpenVpnProxyController(
         var pumpCt = pumpCts.Token;
 
         var producer = ProduceUdpBatchesAsync(socket, channel.Writer, pool, pumpCt, logger);
-        var sender = SendUdpBatchesAsync(ws, channel.Reader, pool, counter, pumpCt, logger);
+        var sender = SendUdpBatchesAsync(ws, channel, pool, counter, pumpCt, logger);
 
         await Task.WhenAny(producer, sender);
         await pumpCts.CancelAsync();
@@ -463,41 +464,33 @@ public class OpenVpnProxyController(
         {
             while (!ct.IsCancellationRequested)
             {
-                var batch = pool.Rent();
+                byte[]? batch = pool.Rent();
                 var offset = 0;
                 long payloadBytes = 0;
 
                 try
                 {
-                    bool moreQueued;
                     do
                     {
-                        var receiveVt = socket.ReceiveAsync(scratch.AsMemory(0, UdpWsFraming.MaxPayloadLength), SocketFlags.None, ct);
-                        moreQueued = receiveVt.IsCompleted;
-
                         int n;
                         try
                         {
-                            n = await receiveVt;
+                            n = await socket.ReceiveAsync(
+                                scratch.AsMemory(0, UdpWsFraming.MaxPayloadLength), SocketFlags.None, ct);
                         }
                         catch (SocketException ex) when (IsTransientUdpError(ex.SocketErrorCode))
                         {
-                            moreQueued = false;
                             continue;
                         }
 
                         if (n is <= 0 or > UdpWsFraming.MaxPayloadLength)
-                        {
-                            moreQueued = false;
                             continue;
-                        }
 
                         if (!UdpWsFraming.CanAppendFrame(offset, n, ProxyBatchBufferPool.BufferSize, UdpWsFraming.BatchTargetBytes)
                             && offset > 0)
                         {
-                            if (!writer.TryWrite(new UdpWsBatch(batch, offset, payloadBytes)))
-                                pool.Return(batch);
-
+                            await writer.WriteAsync(new UdpWsBatch(batch, offset, payloadBytes), ct);
+                            batch = null; // The sender owns an accepted batch.
                             batch = pool.Rent();
                             offset = 0;
                             payloadBytes = 0;
@@ -509,37 +502,40 @@ public class OpenVpnProxyController(
                             logger.LogWarning(
                                 "UDP datagram {Size}B dropped: exceeds batch buffer capacity {Capacity}",
                                 n, ProxyBatchBufferPool.BufferSize);
-                            moreQueued = false;
                             continue;
                         }
 
                         offset += UdpWsFraming.WriteFrame(batch.AsSpan(offset), scratch.AsSpan(0, n));
                         payloadBytes += n;
                     }
-                    while (moreQueued
+                    // Only drain datagrams already waiting on the socket. Waiting for another
+                    // after the last one would stall isolated OpenVPN control/handshake packets.
+                    // Capacity is checked above against the actual next datagram's size.
+                    while (!ct.IsCancellationRequested
                            && offset < UdpWsFraming.BatchTargetBytes
-                           && offset + 2 + UdpWsFraming.MaxPayloadLength <= ProxyBatchBufferPool.BufferSize
-                           && !ct.IsCancellationRequested);
+                           && socket.Available > 0);
 
                     if (offset == 0)
-                    {
-                        pool.Return(batch);
                         continue;
-                    }
 
-                    if (!writer.TryWrite(new UdpWsBatch(batch, offset, payloadBytes)))
-                        pool.Return(batch);
+                    await writer.WriteAsync(new UdpWsBatch(batch, offset, payloadBytes), ct);
+                    batch = null;
                 }
                 catch (OperationCanceledException)
                 {
-                    pool.Return(batch);
                     break;
                 }
                 catch (Exception e)
                 {
-                    pool.Return(batch);
                     logger.LogDebug(e, "UDP receive/batch error. {Message}", e.Message);
                     break;
+                }
+                finally
+                {
+                    // Failed/cancelled writes retain ownership; accepted batches are returned
+                    // by the sender, including any that remain queued when the session ends.
+                    if (batch is not null)
+                        pool.Return(batch);
                 }
             }
         }
@@ -552,7 +548,7 @@ public class OpenVpnProxyController(
 
     private static async Task SendUdpBatchesAsync(
         WebSocket ws,
-        ChannelReader<UdpWsBatch> reader,
+        Channel<UdpWsBatch> channel,
         ProxyBatchBufferPool pool,
         IProxyFlowCounter? counter,
         CancellationToken ct,
@@ -560,7 +556,7 @@ public class OpenVpnProxyController(
     {
         try
         {
-            await foreach (var batch in reader.ReadAllAsync(ct))
+            await foreach (var batch in channel.Reader.ReadAllAsync(ct))
             {
                 try
                 {
@@ -587,6 +583,14 @@ public class OpenVpnProxyController(
         catch (Exception e)
         {
             logger.LogDebug(e, "UDP->WS send error. {Message}", e.Message);
+        }
+        finally
+        {
+            // The sender remains the only reader, even during shutdown. Completing the
+            // writer first prevents blocked/new writes from handing it any more buffers.
+            channel.Writer.TryComplete();
+            while (channel.Reader.TryRead(out var queued))
+                pool.Return(queued.Buffer);
         }
     }
 

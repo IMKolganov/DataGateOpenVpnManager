@@ -5,6 +5,8 @@ using DataGateMonitor.SharedModels.DataGateMonitor.VpnServers.Requests;
 using DataGateMonitor.SharedModels.Enums;
 using DataGateOpenVpnManager.Helpers;
 using DataGateOpenVpnManager.Services.Interfaces;
+using DataGateOpenVpnManager.Services.LocalIssuance;
+using DataGateOpenVpnManager.Services.PiHole;
 using Newtonsoft.Json;
 
 namespace DataGateOpenVpnManager.Services;
@@ -17,8 +19,13 @@ public sealed class VpnServerAnnounceHostedService(
     IHttpClientFactory httpClientFactory,
     IExternalIpAddressService externalIpAddressService,
     IConfiguration configuration,
+    LocalIssuanceOptions localIssuanceOptions,
+    IServiceProvider services,
     ILogger<VpnServerAnnounceHostedService> logger) : BackgroundService
 {
+    /// <summary>Extra announce field (not in SharedModels yet): node event-signing key, bound to the server on approve.</summary>
+    public const string NodePublicKeyField = "NodePublicKeyPem";
+
     public const string HttpClientName = nameof(VpnServerAnnounceHostedService);
     public const string DiscoverPath = "api/open-vpn-servers/discover";
     private const int MaxAttempts = 5;
@@ -50,10 +57,10 @@ public sealed class VpnServerAnnounceHostedService(
 
     private async Task AnnounceWithRetriesAsync(CancellationToken cancellationToken)
     {
-        var backendBaseUrl = configuration["Backend:BaseUrl"];
-        if (string.IsNullOrWhiteSpace(backendBaseUrl))
+        if (BackendBaseAddress.TryResolve(configuration) is null)
         {
-            logger.LogWarning("Skipping VPN server announce: Backend:BaseUrl is not configured.");
+            logger.LogError(
+                "Backend:BaseUrl is missing or not an absolute http(s) URL. Discovery registration stays pending until Backend__BaseUrl is set and the container is restarted.");
             return;
         }
 
@@ -93,7 +100,7 @@ public sealed class VpnServerAnnounceHostedService(
         };
 
         var client = httpClientFactory.CreateClient(HttpClientName);
-        var json = JsonConvert.SerializeObject(request);
+        var json = BuildAnnounceJson(request);
 
         for (var attempt = 1; attempt <= MaxAttempts; attempt++)
         {
@@ -111,10 +118,9 @@ public sealed class VpnServerAnnounceHostedService(
                     return;
                 }
 
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 logger.LogWarning(
-                    "VPN server announce attempt {Attempt}/{MaxAttempts} returned {StatusCode}: {Body}",
-                    attempt, MaxAttempts, (int)response.StatusCode, Truncate(body, 256));
+                    "VPN server announce attempt {Attempt}/{MaxAttempts} returned {StatusCode}.",
+                    attempt, MaxAttempts, (int)response.StatusCode);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -140,6 +146,45 @@ public sealed class VpnServerAnnounceHostedService(
             MaxAttempts, apiUrl);
     }
 
+    internal string BuildAnnounceJson(AnnounceVpnServerRequest request)
+    {
+        AddPiHoleConfiguration(request);
+        request.NodePublicKeyPem = localIssuanceOptions.Enabled
+            ? services.GetRequiredService<INodeIdentity>().PublicKeyPem
+            : null;
+        return JsonConvert.SerializeObject(request);
+    }
+
+    private void AddPiHoleConfiguration(AnnounceVpnServerRequest request)
+    {
+        var options = services.GetService<IPiHoleRuntimeOptionsStore>()?.GetEffective();
+        if (options is null)
+            return;
+
+        var state = PiHoleAnnounceState.Resolve(options, BackendBaseAddress.TryResolve(configuration));
+        request.HasPiHole = state != PiHoleAnnounceState.NoCredentials;
+        request.PiHole = null;
+        if (request.HasPiHole != true)
+            return;
+
+        if (state == PiHoleAnnounceState.OmittedInsecureBackend)
+        {
+            request.HasPiHole = null;
+            logger.LogWarning("Pi-hole credentials were omitted from announce: configure an HTTPS backend URL.");
+            return;
+        }
+
+        request.PiHole = new AnnouncePiHoleConfig
+        {
+            BaseUrl = options.BaseUrl,
+            AppPassword = options.AppPassword,
+            PollIntervalSeconds = options.PollIntervalSeconds,
+            BatchSize = options.BatchSize,
+            LookbackSeconds = options.LookbackSeconds,
+            ClientSubnetPrefix = options.ClientSubnetPrefix
+        };
+    }
+
     private static string ResolveSuggestedName()
     {
         try
@@ -154,12 +199,5 @@ public sealed class VpnServerAnnounceHostedService(
         }
 
         return Environment.MachineName;
-    }
-
-    private static string Truncate(string? value, int max)
-    {
-        if (string.IsNullOrEmpty(value) || value.Length <= max)
-            return value ?? string.Empty;
-        return value[..max] + "…";
     }
 }

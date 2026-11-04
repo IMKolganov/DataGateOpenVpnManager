@@ -33,7 +33,8 @@ public static class OpenVpnManagementStatusParser
                 continue;
             if (!long.TryParse(parts[6], NumberStyles.Integer, CultureInfo.InvariantCulture, out var bytesSent))
                 continue;
-            if (!long.TryParse(parts[7], NumberStyles.Integer, CultureInfo.InvariantCulture, out var connectedSince))
+            var since = parts.Length > 8 && long.TryParse(parts[8], out _) ? parts[8] : parts[7];
+            if (!long.TryParse(since, NumberStyles.Integer, CultureInfo.InvariantCulture, out var connectedSince))
                 connectedSince = 0;
 
             result.Add(new OpenVpnManagementClientEntry(

@@ -4,6 +4,8 @@ using DataGateOpenVpnManager.Services.EasyRsaServices.Interfaces;
 using DataGateOpenVpnManager.Services.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using DataGateOpenVpnManager.Services.LocalIssuance;
 using Microsoft.Extensions.Options;
 using Moq;
 using DataGateMonitor.SharedModels.DataGateOpenVpnManager.Cert.Responses;
